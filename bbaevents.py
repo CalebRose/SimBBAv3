@@ -241,6 +241,16 @@ def ConductFoulShots(
                         play,
                         collector,
                     )
+            else:
+                collector.AppendPlay(
+                    gamestate.PossessingTeam,
+                    play,
+                    "FreeThrow",
+                    gamestate.T1Points,
+                    gamestate.T2Points,
+                    gamestate.PossessionNumber,
+                    gamestate.Total_Possessions,
+                )
 
 
 def ThreePointAttemptEvent(
