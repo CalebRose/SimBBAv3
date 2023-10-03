@@ -1,4 +1,5 @@
 import random
+from constants import *
 
 
 def GetTipoffPossession(
@@ -69,7 +70,7 @@ def OtherTurnoverEvent(
         toPlayer.Position + " " + toPlayer.FirstName + " " + toPlayer.LastName
     )
     team.Stats.AddTurnover()
-    if otherTO < 0.582:
+    if otherTO < outOfBoundsCutoff:
         msg = (
             gamestate.PossessingTeam
             + " "
@@ -87,7 +88,7 @@ def OtherTurnoverEvent(
             gamestate.PossessionNumber,
             gamestate.Total_Possessions,
         )
-    elif otherTO < 0.64:
+    elif otherTO < shotClockViolationCutoff:
         msg = (
             receiving_team
             + ": Shot clock violation on "
@@ -105,7 +106,7 @@ def OtherTurnoverEvent(
             gamestate.PossessionNumber,
             gamestate.Total_Possessions,
         )
-    elif otherTO < 1:
+    elif otherTO < offensiveFoulCutoff:
         msg = (
             receiving_team
             + ": Offensive foul on "
@@ -186,7 +187,7 @@ def ConductFoulShots(
     collector,
 ):
     shots = foulShots
-    ftCutoff = (0.02 * shooter.FreeThrow) + 0.5
+    ftCutoff = (ftMagicNum1 * shooter.FreeThrow) + ftMagicNum2
     while shots > 0:
         if random.random() <= ftCutoff:
             msg = "Free throw coming up... good!"
@@ -275,19 +276,19 @@ def ThreePointAttemptEvent(
     )
     shooter = pickPlayer[0]
     shooter.Stats.AddPossession()
-    blockAdj = (0.00001 * t2State.AdjPerimeterDef) - 0.0153
+    blockAdj = (blockAdjMagicNum1 * t2State.AdjPerimeterDef) - blockAdjMagicNum2
     made3nf = 0
     if shooter.FirstName + " " + shooter.LastName == focus_player:
-        made3nf = (0.015 * shooter.Shooting3) - 4 + 0.185
+        made3nf = (made3nfMagicNum1 * (shooter.Shooting3 - 4)) + made3nfMagicNum2
     else:
-        made3nf = (0.015 * shooter.Shooting3) + 0.185
+        made3nf = (made3nfMagicNum1 * shooter.Shooting3) + made3nfMagicNum2
     if gamestate.IsNeutral != True and isHome == True:
         made3nf += gamestate.HCA
-    madeDiff = made3nf - 0.335
-    missed3nf = 0.635 - madeDiff - blockAdj
-    made3foul = 0.005
-    missed3foul = 0.015
-    blocked = 0.01 + blockAdj
+    madeDiff = made3nf - madeDiffMagicNum1
+    missed3nf = missed3nfMagicNum1 - madeDiff - blockAdj
+    made3foul = made3fMagicNum1
+    missed3foul = missed3nfMagicNum1
+    blocked = blockedMagicNum + blockAdj
     base3Cutoff = 0
     made3Cutoff = base3Cutoff + made3nf
     missed3Cutoff = made3Cutoff + missed3nf
@@ -381,7 +382,7 @@ def Made3Outcome(
     team.Stats.AddThreePointShot(True)
     team.Stats.AddFieldGoal(True)
     assistRand = random.random()
-    if assistRand > 0.173:
+    if assistRand > assistCutoff:
         assister = SelectAssister(shooter, team_state)
         if assister.ID != shooter.ID:
             assister.Stats.AddAssist()
@@ -477,7 +478,7 @@ def Blocked3Outcome(
         + "."
     )
     rebrand = random.random()
-    if rebrand < 0.43:
+    if rebrand < reboundCutoff:
         ReboundTheBall(
             gamestate,
             t1State,
@@ -573,7 +574,7 @@ def Made3FoulOutcome(
     team_one.Stats.CalculateLead(3, gamestate.T1Points - gamestate.T2Points)
     team_one.Stats.AddFieldGoal(True)
     assistRand = random.random()
-    if assistRand > 0.173:
+    if assistRand > assistCutoff:
         assister = SelectAssister(shooter, t1State)
         if assister.ID != shooter.ID:
             assister.Stats.AddAssist()
@@ -627,19 +628,25 @@ def JumperAttemptEvent(
     )
     shooter = pickPlayer[0]
     shooter.Stats.AddPossession()
-    blockAdj = (0.00001 * t2State.AdjInteriorDef) - 0.0153
+    blockAdj = (blockAdjMagicNum1 * t2State.AdjInteriorDef) - blockAdjMagicNum2
     made2jnf = 0
     if shooter.FirstName + " " + shooter.LastName == focus_player:
-        made2jnf = (0.006 * shooter.Shooting2) - 4 + 0.185 + gamestate.HCA
+        made2jnf = (
+            (made2jnfMagicNum1 * (shooter.Shooting2 - 4))
+            + made2jnfMagicNum2
+            + gamestate.HCA
+        )
     else:
-        made2jnf = (0.006 * shooter.Shooting2) + 0.185 + gamestate.HCA
+        made2jnf = (
+            (made2jnfMagicNum1 * shooter.Shooting2) + made2jnfMagicNum2 + gamestate.HCA
+        )
     if gamestate.IsNeutral != True and isHome == True:
         made2jnf += gamestate.HCA
-    madeDiff = made2jnf - 0.335
-    missed2jnf = 0.53 - madeDiff - blockAdj
-    made2jfoul = 0.01
-    missed2jfoul = 0.02
-    blocked = 0.07 + blockAdj
+    madeDiff = made2jnf - made2jnfDiffMagicNum1
+    missed2jnf = missed2jnfMagicNum1 - madeDiff - blockAdj
+    made2jfoul = made2jfoulMagicNum
+    missed2jfoul = missed2jfoulMagicNum
+    blocked = blockedJumperMagicNum + blockAdj
     base2jCutoff = 0
     made2jCutoff = base2jCutoff + made2jnf
     missed2jCutoff = made2jCutoff + missed2jnf
@@ -726,7 +733,7 @@ def MadeJumperOutcome(
     team.Stats.CalculateLead(2, gamestate.T1Points - gamestate.T2Points)
     team.Stats.AddFieldGoal(True)
     assistRand = random.random()
-    if assistRand > 0.678:
+    if assistRand > assistJumperCutoff:
         assister = SelectAssister(shooter, team_state)
         if assister.ID != shooter.ID:
             assister.Stats.AddAssist()
@@ -821,7 +828,7 @@ def BlockedJumperOutcome(
         + "."
     )
     rebrand = random.random()
-    if rebrand < 0.43:
+    if rebrand < reboundCutoff:
         ReboundTheBall(
             gamestate,
             t1State,
@@ -915,7 +922,7 @@ def MadeJumperFoulOutcome(
     )
     team_one.Stats.CalculateLead(2, gamestate.T1Points - gamestate.T2Points)
     assistRand = random.random()
-    if assistRand > 0.678:
+    if assistRand > assistJumperCutoff:
         assister = SelectAssister(shooter, t1State)
         if assister.ID != shooter.ID:
             assister.Stats.AddAssist()
@@ -969,19 +976,25 @@ def InsideAttemptEvent(
     )
     shooter = pickPlayer[0]
     shooter.Stats.AddPossession()
-    blockAdj = (0.00001 * t2State.AdjInteriorDef) - 0.0153
+    blockAdj = (blockAdjMagicNum1 * t2State.AdjInteriorDef) - blockAdjMagicNum2
     made2inf = 0
     if shooter.FirstName + " " + shooter.LastName == focus_player:
-        made2inf = (0.005 * shooter.Finishing) - 4 + 0.185 + gamestate.HCA
+        made2inf = (
+            (made2infMagicNum1 * (shooter.Finishing - 4))
+            + made2infMagicNum2
+            + gamestate.HCA
+        )
     else:
-        made2inf = (0.005 * shooter.Finishing) + 0.185 + gamestate.HCA
+        made2inf = (
+            (made2infMagicNum1 * shooter.Finishing) + made2infMagicNum2 + gamestate.HCA
+        )
     if gamestate.IsNeutral != True and isHome == True:
         made2inf += gamestate.HCA
-    madeDiff = made2inf - 0.563
-    missed2inf = 0.147 - madeDiff - blockAdj
-    made2infoul = 0.05
-    missed2infoul = 0.14
-    blocked = 0.1 + blockAdj
+    madeDiff = made2inf - madeDiffInsideMagicNum
+    missed2inf = missed2infMagicNum - madeDiff - blockAdj
+    made2infoul = made2infoulMagicNum
+    missed2infoul = missed2infoulMagicNum
+    blocked = blockedInfMagicNum + blockAdj
     base2inCutoff = 0
     made2inCutoff = base2inCutoff + made2inf
     missed2inCutoff = made2inCutoff + missed2inf
@@ -1068,7 +1081,7 @@ def MadeInsideOutcome(
     team.Stats.CalculateLead(2, gamestate.T1Points - gamestate.T2Points)
     team.Stats.AddFieldGoal(True)
     assistRand = random.random()
-    if assistRand > 0.57:
+    if assistRand > assistInsideCutoff:
         assister = SelectAssister(shooter, team_state)
         if assister.ID != shooter.ID:
             assister.Stats.AddAssist()
@@ -1163,7 +1176,7 @@ def BlockedInsideOutcome(
         + "."
     )
     rebrand = random.random()
-    if rebrand < 0.43:
+    if rebrand < reboundCutoff:
         ReboundTheBall(
             gamestate,
             t1State,
@@ -1257,7 +1270,7 @@ def MadeInsideFoulOutcome(
     )
     team_one.Stats.CalculateLead(2, gamestate.T1Points - gamestate.T2Points)
     assistRand = random.random()
-    if assistRand > 0.57:
+    if assistRand > assistInsideCutoff:
         assister = SelectAssister(shooter, t1State)
         if assister.ID != shooter.ID:
             assister.Stats.AddAssist()
