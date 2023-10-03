@@ -112,7 +112,7 @@ class TeamState:
         self.MidPro = sum(cp["MidRangeProportion"] for cp in rosterRaw_df)
         self.T3ptPro = sum(cp["ThreePointProportion"] for cp in rosterRaw_df)
 
-    def SetRoster(self, is_nba, rosterRaw_df):
+    def SetRoster(self, is_nba, rosterRaw_df, matchType):
         for x in rosterRaw_df:
             cp = Player(
                 is_nba,
@@ -122,6 +122,7 @@ class TeamState:
                 self.t3ptShootingBonus,
                 self.BallworkBonus,
                 self.ReboundingBonus,
+                matchType,
             )
             cp.get_advanced_stats(
                 self.Rebounding,

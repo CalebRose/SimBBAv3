@@ -158,6 +158,8 @@ def ReboundTheBall(
         gamestate.PossessionNumber,
         gamestate.Total_Possessions,
     )
+    if is_offense:
+        gamestate.DecrementPossessions()
     gamestate.SetPossessingTeam(receiving_team)
 
 

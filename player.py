@@ -8,7 +8,15 @@ class Roster:
 
 class Player:
     def __init__(
-        self, is_nba, cp, finishingBonus, midBonus, threePtBonus, bwBonus, rebBonus
+        self,
+        is_nba,
+        cp,
+        finishingBonus,
+        midBonus,
+        threePtBonus,
+        bwBonus,
+        rebBonus,
+        matchType,
     ):
         self.ID = cp["ID"]
         self.FirstName = cp["FirstName"]
@@ -44,7 +52,7 @@ class Player:
         self.MidRangeProportion = cp["MidRangeProportion"]
         self.ThreePointProportion = cp["ThreePointProportion"]
         self.Overall = cp["Overall"]
-        self.Stats = PlayerStats(cp)
+        self.Stats = PlayerStats(cp, matchType)
         self.Shooting = 0
         self.AdjShooting = 0
         self.AdjFinishing = 0
@@ -103,9 +111,11 @@ class Player:
 
 
 class PlayerStats:
-    def __init__(self, cp):
+    def __init__(self, cp, matchType):
         self.PlayerID = cp["ID"]
         self.Minutes = cp["Minutes"]
+        self.Year = cp["Year"]
+        self.MatchType = matchType
         self.Possessions = 0
         self.FGM = 0
         self.FGA = 0

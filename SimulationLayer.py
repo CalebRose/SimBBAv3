@@ -20,8 +20,12 @@ def rungame(
     is_nba,
     filePath,
     livestreamChannel,
-    num,
+    week,
     matchType,
+    match_name,
+    arena,
+    city,
+    state,
 ):
     h = hometeam
     a = awayteam
@@ -67,8 +71,8 @@ def rungame(
     t2rosterRaw_df = match_data["AwayTeamRoster"]
     t1State.SetTeamAttributes(t1rosterRaw_df)
     t2State.SetTeamAttributes(t2rosterRaw_df)
-    t1State.SetRoster(game.IsNBA, t1rosterRaw_df)
-    t2State.SetRoster(game.IsNBA, t2rosterRaw_df)
+    t1State.SetRoster(game.IsNBA, t1rosterRaw_df, matchType)
+    t2State.SetRoster(game.IsNBA, t2rosterRaw_df, matchType)
     t1State.SetDefensiveAttributes()
     t2State.SetDefensiveAttributes()
 
@@ -129,7 +133,6 @@ def rungame(
             )
             game.SetPossessingTeam(pos)
             game.SetGameHCA()
-        game.IncrementPossessions()
 
         possrand = random.random()
 
@@ -245,6 +248,8 @@ def rungame(
                     collector,
                 )
 
+        game.IncrementPossessions()
+
         # if NBA GAME
         if (
             game.PossessionNumber == math.floor((game.Total_Possessions) / 4)
@@ -355,7 +360,7 @@ def rungame(
         folderPath = "nbatv"
     else:
         folderPath = "int"
-    weekDirectory = filePath + folderPath + "/Week " + num
+    weekDirectory = filePath + folderPath + "/Week " + week
     if not os.path.exists(weekDirectory):
         os.makedirs(weekDirectory)
     fullDirectory = weekDirectory + "/" + matchType
@@ -397,16 +402,20 @@ def rungame(
                 "HomeTeamScore",
                 "AwayTeamScore",
                 "Total Possessions",
+                "Home Coach",
                 "HomeOffensiveStyle",
                 "HomeOffensiveFormation",
                 "HomeDefensiveFormation",
                 "HomePace",
+                "Away Coach",
                 "AwayOffensiveStyle",
                 "AwayOffensiveFormation",
                 "AwayDefensiveFormation",
                 "AwayPace",
                 "Match Name",
                 "Arena",
+                "City",
+                "State",
             ]
         )
         writer.writerow(
@@ -416,16 +425,20 @@ def rungame(
                 str(game.T1Points),
                 str(game.T2Points),
                 str(game.Total_Possessions),
+                HomeCoach,
                 t1team_df["OffensiveStyle"],
                 t1team_df["OffensiveFormation"],
                 t1team_df["DefensiveFormation"],
                 t1team_df["Pace"],
+                AwayCoach,
                 t2team_df["OffensiveStyle"],
                 t2team_df["OffensiveFormation"],
                 t2team_df["DefensiveFormation"],
                 t2team_df["Pace"],
-                "",
-                "",
+                match_name,
+                arena,
+                city,
+                state,
             ]
         )
         writer.writerow([""])

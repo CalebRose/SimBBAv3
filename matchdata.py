@@ -2,6 +2,14 @@ import requests
 import json
 
 url = "https://simnba.azurewebsites.net/"
+# url = "http://localhost:8081/"
+
+
+def GetMatchesForSimulation():
+    res = requests.get(url + "simbba/matches/simulation")
+    if res.status_code == 200:
+        return res.json()
+    return False
 
 
 def GetMatchData(home, away, is_NBA):

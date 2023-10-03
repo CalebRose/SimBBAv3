@@ -61,6 +61,9 @@ class GameState:
         ):
             self.Quarter = 4
 
+    def DecrementPossessions(self):
+        self.PossessionNumber -= 1
+
     def SetOvertime(self):
         self.IsOT = True
         self.Total_Possessions += math.floor((self.Total_Possessions) / 8)
