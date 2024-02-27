@@ -69,7 +69,7 @@ class TeamState:
             self.MidShootingBonus -= 0.5
             self.t3ptShootingBonus -= 0.5
         elif formation == "Space-and-Post":
-            self.MidShootingBonus += 1.5
+            self.MidShootingBonus += 1.75
             self.t3ptShootingBonus += 0.5
             self.BallworkBonus -= 1.5
             self.ReboundingBonus -= 0.5

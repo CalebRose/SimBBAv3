@@ -19,7 +19,7 @@ def rungame(
     is_neutral,
     is_nba,
     filePath,
-    livestreamChannel,
+    livestream_channel,
     week,
     matchType,
     match_name,
@@ -117,9 +117,10 @@ def rungame(
     else:
         h_logo = Home["Abbr"]
         a_logo = Away["Abbr"]
+    tipoff_occurred = False
 
     while game.PossessionNumber <= game.Total_Possessions:
-        if game.PossessionNumber == 0:
+        if game.PossessionNumber == 0 and tipoff_occurred == False:
             pos = GetTipoffPossession(
                 t1TipChance,
                 collector,
@@ -133,7 +134,8 @@ def rungame(
             )
             game.SetPossessingTeam(pos)
             game.SetGameHCA()
-
+            tipoff_occurred = True
+        game.IncrementPossessions()
         possrand = random.random()
 
         if game.PossessingTeam == h_logo:
@@ -248,8 +250,6 @@ def rungame(
                     collector,
                 )
 
-        game.IncrementPossessions()
-
         # if NBA GAME
         if (
             game.PossessionNumber == math.floor((game.Total_Possessions) / 4)
@@ -348,41 +348,36 @@ def rungame(
     )
 
     folderPath = ""
-    if livestreamChannel == 1 or livestreamChannel == "1":
+    if livestream_channel == 1 or livestream_channel == "1":
         folderPath = "cbs"
-    elif livestreamChannel == 2 or livestreamChannel == "2":
+    elif livestream_channel == 2 or livestream_channel == "2":
         folderPath = "tbs"
-    elif livestreamChannel == 3 or livestreamChannel == "3":
+    elif livestream_channel == 3 or livestream_channel == "3":
         folderPath = "espn"
-    elif livestreamChannel == 4 or livestreamChannel == "4":
+    elif livestream_channel == 4 or livestream_channel == "4":
+        folderPath = "espn2"
+    elif livestream_channel == 5 or livestream_channel == "5":
         folderPath = "tnt"
-    elif livestreamChannel == 5 or livestreamChannel == "5":
+    elif livestream_channel == 6 or livestream_channel == "6":
         folderPath = "nbatv"
     else:
         folderPath = "int"
-    weekDirectory = filePath + folderPath + "/Week " + week
+    weekDirectory = os.path.normpath(os.path.join(filePath, folderPath, "Week " + week))
     if not os.path.exists(weekDirectory):
         os.makedirs(weekDirectory)
-    fullDirectory = weekDirectory + "/" + matchType
+    fullDirectory = os.path.normpath(os.path.join(weekDirectory, matchType))
     if not os.path.exists(fullDirectory):
         os.makedirs(fullDirectory)
-    play_by_play_path = fullDirectory + "/play_by_plays"
-    box_score_path = fullDirectory + "/box_scores"
+    play_by_play_path = os.path.normpath(os.path.join(fullDirectory, "play_by_plays"))
+    box_score_path = os.path.normpath(os.path.join(fullDirectory, "box_scores"))
     if not os.path.exists(play_by_play_path):
         os.makedirs(play_by_play_path)
 
     if not os.path.exists(box_score_path):
         os.makedirs(box_score_path)
 
-    file_name = (
-        play_by_play_path
-        + "/"
-        + gameid
-        + "_"
-        + h_team
-        + "_"
-        + a_team
-        + "_play_by_play.csv"
+    file_name = os.path.normpath(
+        play_by_play_path + f"/{gameid}_{h_team}_{a_team}_play_by_play.csv"
     )
     with open(file_name, "w", newline="") as csvfile:
         fieldnames = [
@@ -456,7 +451,7 @@ def rungame(
                 ]
             )
 
-    file_name = (
+    file_name = os.path.normpath(
         box_score_path + "/" + gameid + "_" + h_team + "_" + a_team + "_box_score.csv"
     )
     with open(file_name, "w", newline="") as csvfile:

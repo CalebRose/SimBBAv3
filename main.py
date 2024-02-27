@@ -8,7 +8,12 @@ import os
 testing = False
 cbb_result_list = []
 nba_result_list = []
-newPath = "../simulation/BBA/"
+script_dir = os.path.dirname(
+    os.path.abspath(__file__)
+)  # Get the absolute dir the script is in
+os.chdir(script_dir)
+print("Current Directory: ", os.getcwd())
+newPath = os.path.normpath(os.path.join(script_dir, "../simulation/BBA/"))
 if not os.path.exists(newPath):
     os.makedirs(newPath)
 
