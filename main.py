@@ -5,7 +5,7 @@ from matchdata import *
 import csv
 import os
 
-testing = False
+testing = True
 cbb_result_list = []
 nba_result_list = []
 script_dir = os.path.dirname(
