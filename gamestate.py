@@ -18,6 +18,28 @@ class GameState:
         self.PossessionNumber = 0
         self.PossessingTeam = ""
         self.Collector = Play_By_Play_Collector()
+        self.ThreePointEvents = 0
+        self.ThreeShotMade = 0
+        self.ThreeShotMissed = 0
+        self.ThreeShotBlocked = 0
+        self.ThreeShotFoulMiss = 0
+        self.ThreeShotFoulMade = 0
+        self.MidEvents = 0
+        self.MidShotMade = 0
+        self.MidShotMissed = 0
+        self.MidShotBlocked = 0
+        self.MidShotFoulMiss = 0
+        self.MidShotFoulMade = 0
+        self.TurnoverEvents = 0
+        self.InsideEvents = 0
+        self.InsideShotMade = 0
+        self.InsideShotMissed = 0
+        self.InsideShotBlocked = 0
+        self.InsideShotFoulMiss = 0
+        self.InsideShotFoulMade = 0
+        self.StealEvents = 0
+        self.Offensive_Rebounds = 0
+        self.Defensive_Rebounds = 0
 
     def SetInitialValues(self, neutral, nba_match):
         if neutral == False:
@@ -29,12 +51,15 @@ class GameState:
             self.HCAAdj = 0
         self.IsNBA = nba_match
 
-    def SetGameHCA(self):
+    def SetGameHCA(self, capacity):
         if self.IsNeutral:
             self.HCA = 0
             self.HCAAdj = 0
         else:
-            self.HCA = 0.025
+            percentage = capacity / 12500
+            if percentage > 1:
+                percentage = 1
+            self.HCA = 0.025 * percentage
 
     def SetPossessions(self, t1Pace, t2Pace):
         self.Total_Possessions = t1Pace + t2Pace
@@ -76,3 +101,54 @@ class GameState:
             self.T1Points += points
         else:
             self.T2Points += points
+
+    def IncrementEventCount(self, event):
+        if event == "Three":
+            self.ThreePointEvents += 1
+        elif event == "Mid":
+            self.MidEvents += 1
+        elif event == "Inside":
+            self.InsideEvents += 1
+        elif event == "Turnover":
+            self.TurnoverEvents += 1
+        elif event == "Steal":
+            self.StealEvents += 1
+        elif event == "OffReb":
+            self.Offensive_Rebounds += 1
+        elif event == "DefReb":
+            self.Defensive_Rebounds += 1
+
+    def IncrementShotResultCount(self, shot, res):
+        if shot == "Three":
+            if res == "Made":
+                self.ThreeShotMade += 1
+            elif res == "Missed":
+                self.ThreeShotMissed += 1
+            elif res == "Blocked":
+                self.ThreeShotBlocked += 1
+            elif res == "FoulMissed":
+                self.ThreeShotFoulMiss += 1
+            elif res == "FoulMade":
+                self.ThreeShotFoulMade += 1
+        elif shot == "Mid":
+            if res == "Made":
+                self.MidShotMade += 1
+            elif res == "Missed":
+                self.MidShotMissed += 1
+            elif res == "Blocked":
+                self.MidShotBlocked += 1
+            elif res == "FoulMissed":
+                self.MidShotFoulMiss += 1
+            elif res == "FoulMade":
+                self.MidShotFoulMade += 1
+        elif shot == "Inside":
+            if res == "Made":
+                self.InsideShotMade += 1
+            elif res == "Missed":
+                self.InsideShotMissed += 1
+            elif res == "Blocked":
+                self.InsideShotBlocked += 1
+            elif res == "FoulMissed":
+                self.InsideShotFoulMiss += 1
+            elif res == "FoulMade":
+                self.InsideShotFoulMade += 1

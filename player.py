@@ -33,6 +33,9 @@ class Player:
             self.IsInternational = cp["IsInternational"]
             self.IsNBA = cp["IsNBA"]
         self.Position = cp["Position"]
+        self.PositionOne = cp["PositionOne"]
+        self.PositionTwo = cp["PositionTwo"]
+        self.PositionThree = cp["PositionThree"]
         self.Age = cp["Age"]
         self.Height = util.Get_Inches(cp["Height"])
         self.Shooting2 = cp["Shooting2"] + midBonus
@@ -71,6 +74,15 @@ class Player:
         self.MidUsage = 0
         self.ThreePointUsage = 0
         self.DefRateTO = 0
+        self.Discipline = cp["Discipline"]
+        self.FouledOut = False
+        self.IsInjured = cp["IsInjured"]
+        self.InjuryRating = cp["InjuryRating"]
+        self.InjuryName = cp["InjuryName"]
+        self.InjuryType = cp["InjuryType"]
+        self.WeeksOfRecovery = cp["WeeksOfRecovery"]
+        self.AdjInjury = 0
+        self.AdjDiscipline = 0
 
     def get_advanced_stats(
         self,
@@ -97,17 +109,49 @@ class Player:
             ((self.InteriorDefense + self.PerimeterDefense) / 2) * self.Minutes
         ) / totalDefense
         self.AssistPer = self.AdjBallwork / totalAssist
-        self.Usage = self.Minutes / 20
-        self.InsideUsage = self.InsideProportion / (
-            240 * (InsideProportion / 100) * 2.4
-        )
-        self.MidUsage = self.MidRangeProportion / (240 * (MidProportion / 100) * 2.4)
-        self.ThreePointUsage = self.ThreePointProportion / (
-            240 * (ThreePtProportion / 100) * 2.4
-        )
+        if self.FouledOut == False or self.IsInjured == False:
+            self.Usage = self.Minutes / 20
+            self.InsideUsage = self.InsideProportion / (
+                240 * (InsideProportion / 100) * 2.4
+            )
+            self.MidUsage = self.MidRangeProportion / (
+                240 * (MidProportion / 100) * 2.4
+            )
+            self.ThreePointUsage = self.ThreePointProportion / (
+                240 * (ThreePtProportion / 100) * 2.4
+            )
         self.DefRateTO = (
             (self.PerimeterDefense + self.InteriorDefense + turnoverBonus) / 2
         ) * self.Minutes
+        self.AdjInjury = (20 - self.InjuryRating) * self.Minutes
+        self.AdjDiscipline = (20 - self.Discipline) * self.Minutes
+
+    def WithdrawFromGame(self):
+        self.Minutes = 0
+        self.Usage = 0
+        self.InsideProportion = 0
+        self.MidRangeProportion = 0
+        self.ThreePointProportion = 0
+        self.InsideUsage = 0
+        self.MidUsage = 0
+        self.ThreePointUsage = 0
+
+    def RecordInjury(self, name, severity, recovery):
+        self.IsInjured = True
+        self.InjuryName = name
+        self.InjuryType = severity
+        self.WeeksOfRecovery = recovery
+        self.WithdrawFromGame()
+
+    def AddFoul(self, is_nba):
+        self.Stats.AddFoul()
+        if (self.Stats.Fouls == 6 and is_nba) or (
+            self.Stats.Fouls == 5 and is_nba == False
+        ):
+            print(f"{self.FirstName} {self.LastName} has fouled out.")
+            self.FouledOut = True
+            self.WithdrawFromGame()
+            self.Stats.FoulOut()
 
 
 class PlayerStats:
@@ -116,6 +160,7 @@ class PlayerStats:
         self.Minutes = cp["Minutes"]
         self.Year = cp["Year"]
         self.MatchType = matchType
+        self.FouledOut = False
         self.Possessions = 0
         self.FGM = 0
         self.FGA = 0
@@ -186,3 +231,6 @@ class PlayerStats:
 
     def AddFoul(self):
         self.Fouls += 1
+
+    def FoulOut(self):
+        self.FouledOut = True

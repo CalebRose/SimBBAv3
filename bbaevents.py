@@ -1,5 +1,6 @@
 import random
 from constants import *
+import util
 
 
 def GetTipoffPossession(
@@ -37,6 +38,47 @@ def GetTipoffPossession(
     return Home
 
 
+def GetShooter(roster, shot_type):
+    filtered_roster = [player for player in roster if player.Usage > 0]
+    weight = []
+    if shot_type == 1:
+        weight = [x.ThreePointUsage for x in filtered_roster]
+    elif shot_type == 2:
+        weight = [x.MidUsage for x in filtered_roster]
+    else:
+        weight = [x.InsideUsage for x in filtered_roster]
+    pickPlayer = random.choices(
+        filtered_roster,
+        weights=weight,
+        k=1,
+    )
+    return pickPlayer[0]
+
+
+def GetRebounder(roster):
+    filtered_roster = [player for player in roster if player.Usage > 0]
+    weight = [
+        player.AdjRebounding * POSITION_WEIGHTS.get(player.Position, 1.0)
+        for player in filtered_roster
+    ]
+    pickPlayer = random.choices(
+        filtered_roster,
+        weights=weight,
+        k=1,
+    )
+    return pickPlayer[0]
+
+
+def GetReboundProbability(offReb, defReb):
+    height_diff = offReb.Height - defReb.Height
+    adj_height_diff = height_diff * adj_height_magic_num
+    off_rebound_adj = offReb.AdjRebounding + adj_height_diff
+    probability = (
+        off_rebound_adj / (off_rebound_adj + defReb.AdjRebounding)
+    ) * adj_rebound_magic_num
+    return probability
+
+
 def StealEvent(gamestate, roster, team1, team2, t, label, collector):
     pickPlayer = random.choices(roster, weights=[x.DefensePer for x in roster], k=1)
     stealPlayer = pickPlayer[0]
@@ -59,10 +101,12 @@ def StealEvent(gamestate, roster, team1, team2, t, label, collector):
 
 
 def OtherTurnoverEvent(
-    gamestate, roster, team, receiving_team, receiving_label, collector
+    gamestate, tState, team, receiving_team, receiving_label, collector
 ):
     otherTO = random.random()
-    pickPlayer = random.choices(roster, weights=[x.Usage for x in roster], k=1)
+    pickPlayer = random.choices(
+        tState.Roster, weights=[x.Usage for x in tState.Roster], k=1
+    )
     toPlayer = pickPlayer[0]
     toPlayer.Stats.AddPossession()
     toPlayer.Stats.AddTurnover()
@@ -107,14 +151,11 @@ def OtherTurnoverEvent(
             gamestate.Total_Possessions,
         )
     elif otherTO < offensiveFoulCutoff:
-        msg = (
-            receiving_team
-            + ": Offensive foul on "
-            + gamestate.PossessingTeam
-            + " "
-            + printShooter
-            + "."
-        )
+        msg = f"{receiving_team}: Offensive foul on {gamestate.PossessingTeam} {printShooter}."
+        toPlayer.AddFoul(gamestate.IsNBA)
+        if toPlayer.FouledOut == True:
+            tState.ReloadRoster()
+            msg += f"It looks like {toPlayer.LastName} has accumulated the maximum limit on fouls and cannot play for the remainder of the game."
         collector.AppendPlay(
             receiving_team,
             msg,
@@ -124,13 +165,12 @@ def OtherTurnoverEvent(
             gamestate.PossessionNumber,
             gamestate.Total_Possessions,
         )
-        toPlayer.Stats.AddFoul()
     gamestate.SetPossessingTeam(receiving_team)
 
 
 def ReboundTheBall(
     gamestate,
-    team_state,
+    rebounder,
     team,
     receiving_team,
     receiving_label,
@@ -138,12 +178,6 @@ def ReboundTheBall(
     play,
     collector,
 ):
-    pickRebounder = random.choices(
-        team_state.Roster,
-        weights=[x.ReboundingPer for x in team_state.Roster],
-        k=1,
-    )
-    rebounder = pickRebounder[0]
     rebounder.Stats.AddRebound(is_offense)
     team.Stats.AddRebound(is_offense)
     printRebounder = (
@@ -222,10 +256,14 @@ def ConductFoulShots(
             shots -= 1
             if shots == 0:
                 rebrand = random.random()
-                if rebrand < t1State.OffensiveRebound:
+                off_rebounder = GetRebounder(t1State.Roster)
+                def_rebounder = GetRebounder(t2State.Roster)
+                reb_probability = GetReboundProbability(off_rebounder, def_rebounder)
+                if rebrand < reb_probability:
+                    gamestate.IncrementEventCount("OffReb")
                     ReboundTheBall(
                         gamestate,
-                        t1State,
+                        off_rebounder,
                         team_one,
                         gamestate.PossessingTeam,
                         home_label,
@@ -234,9 +272,10 @@ def ConductFoulShots(
                         collector,
                     )
                 else:
+                    gamestate.IncrementEventCount("DefReb")
                     ReboundTheBall(
                         gamestate,
-                        t2State,
+                        def_rebounder,
                         team_two,
                         receiving_team,
                         receiving_label,
@@ -256,6 +295,120 @@ def ConductFoulShots(
                 )
 
 
+def GetDefender(formation, offensive_style, roster, shooter):
+    defensivePlayer = None
+    filtered_defense = []
+
+    def total_usage(players):
+        return sum(p.Usage for p in players)
+
+    if formation == "Man-to-Man":
+        filtered_defense = [
+            p
+            for p in roster
+            if (
+                (p.PositionOne != "" and p.PositionOne == shooter.PositionOne)
+                or (p.PositionTwo != "" and p.PositionTwo == shooter.PositionTwo)
+                or (p.PositionThree != "" and p.PositionThree == shooter.PositionThree)
+            )
+            and p.Usage > 0.0
+        ]
+        # Fallback for offensive style differences
+        if not filtered_defense or total_usage(filtered_defense) == 0:
+            if offensive_style == "Jumbo" and (shooter.PositionOne == "PG"):
+                filtered_defense = [
+                    p
+                    for p in roster
+                    if (
+                        p.PositionOne == "SG"
+                        or p.PositionTwo == "SG"
+                        or p.PositionThree == "SG"
+                    )
+                    and p.Usage > 0.0
+                ]
+            elif offensive_style == "Small Ball" and (shooter.PositionOne == "C"):
+                filtered_defense = [
+                    p
+                    for p in roster
+                    if (
+                        p.PositionOne == "PF"
+                        or p.PositionTwo == "PF"
+                        or p.PositionThree == "PF"
+                    )
+                    and p.Usage > 0.0
+                ]
+            elif offensive_style == "Microball" and (
+                shooter.PositionOne == "C" or shooter.PositionTwo == "PF"
+            ):
+                filtered_defense = [
+                    p
+                    for p in roster
+                    if (
+                        p.PositionOne == "SF"
+                        or p.PositionTwo == "SF"
+                        or p.PositionThree == "SF"
+                    )
+                    and p.Usage > 0.0
+                ]
+    else:
+        filtered_defense = roster
+
+    if not filtered_defense:
+        filtered_defense = roster
+
+    defensivePlayer = random.choices(
+        filtered_defense,
+        weights=[x.Usage for x in filtered_defense],
+        k=1,
+    )
+    return defensivePlayer[0]
+
+
+def GetFouler(roster):
+    eligible_players = [player for player in roster if player.Usage > 0]
+    weights = [player.AdjDiscipline for player in eligible_players]
+    fouling_player = random.choices(
+        eligible_players,
+        weights=weights,
+        k=1,
+    )
+    return fouling_player[0]
+
+
+def HandleInjury(t1State, t2State, injury_state):
+    combined_list = t1State.Roster + t2State.Roster
+    filtered_combined_list = [player for player in combined_list if player.Usage > 0.0]
+    injured_player = random.choices(
+        filtered_combined_list,
+        weights=[x.AdjInjury for x in filtered_combined_list],
+        k=1,
+    )
+    injuree = injured_player[0]
+    # Generate injury
+    injury_weights = injury_state["injury_weights"]
+    designated_injury = random.choices(
+        injury_weights,
+        weights=[x["weight"] for x in injury_weights],
+        k=1,
+    )
+    chosen_injury = designated_injury[0]
+    injury_name = chosen_injury["name"]
+    severity = util.GetInjurySeverity(injury_name)
+    injury_map = injury_state["injury_map"]
+    recovery_list = injury_map[injury_name][severity]
+    # Because the range is within weeks, we multiply by 4 because of the number of games in a week
+    minimum = recovery_list[0]
+    maximum = recovery_list[1] * 4
+    # If the severity isn't mild, multiply minimum by 4.
+    # Mild is the only option where a player can be injured for less than 1 week
+    if severity != "Mild" or severity in ("Achilles", "Arm", "Leg"):
+        minimum = minimum * 4
+    recovery_time = random.randrange(minimum, maximum)
+    injuree.RecordInjury(injury_name, severity, recovery_time)
+    t1State.ReloadRoster()
+    t2State.ReloadRoster()
+
+
 def ThreePointAttemptEvent(
     gamestate,
     t1State,
@@ -269,14 +422,14 @@ def ThreePointAttemptEvent(
     isHome,
     collector,
 ):
-    pickPlayer = random.choices(
-        t1State.Roster,
-        weights=[x.ThreePointUsage for x in t1State.Roster],
-        k=1,
-    )
-    shooter = pickPlayer[0]
+    shooter = GetShooter(t1State.Roster, 1)
     shooter.Stats.AddPossession()
-    blockAdj = (blockAdjMagicNum1 * t2State.AdjPerimeterDef) - blockAdjMagicNum2
+    defender = GetDefender(
+        t2State.DefensiveFormation, t2State.OffensiveStyle, t2State.Roster, shooter
+    )
+    # DO THE DEFENSIVE PLAYER'S ADJPERIMETER DEFENSE HERE
+    # blockAdj = (blockAdjMagicNum1 * t2State.AdjPerimeterDef) - blockAdjMagicNum2
+    blockAdj = (blockAdjMagicNum1 * defender.AdjPerimeterDefense) - blockAdjMagicNum2
     made3nf = 0
     if shooter.FirstName + " " + shooter.LastName == focus_player:
         made3nf = (made3nfMagicNum1 * (shooter.Shooting3 - 4)) + made3nfMagicNum2
@@ -287,7 +440,7 @@ def ThreePointAttemptEvent(
     madeDiff = made3nf - madeDiffMagicNum1
     missed3nf = missed3nfMagicNum1 - madeDiff - blockAdj
     made3foul = made3fMagicNum1
-    missed3foul = missed3nfMagicNum1
+    missed3foul = missed3foulMagicNum
     blocked = blockedMagicNum + blockAdj
     base3Cutoff = 0
     made3Cutoff = base3Cutoff + made3nf
@@ -298,9 +451,11 @@ def ThreePointAttemptEvent(
     eventOutcome = random.random()
 
     if eventOutcome < made3Cutoff:
+        gamestate.IncrementShotResultCount("Three", "Made")
         Made3Outcome(
             gamestate,
             shooter,
+            defender,
             t1State,
             team1,
             receiving_team,
@@ -308,9 +463,11 @@ def ThreePointAttemptEvent(
             collector,
         )
     elif eventOutcome < missed3Cutoff:
+        gamestate.IncrementShotResultCount("Three", "Missed")
         Missed3Outcome(
             gamestate,
             shooter,
+            defender,
             t1State,
             t2State,
             team1,
@@ -321,9 +478,11 @@ def ThreePointAttemptEvent(
             collector,
         )
     elif eventOutcome < blocked3Cutoff:
+        gamestate.IncrementShotResultCount("Three", "Blocked")
         Blocked3Outcome(
             gamestate,
             shooter,
+            defender,
             t1State,
             t2State,
             team1,
@@ -334,9 +493,11 @@ def ThreePointAttemptEvent(
             collector,
         )
     elif eventOutcome < missed3foulCutoff:
+        gamestate.IncrementShotResultCount("Three", "FoulMissed")
         Missed3FoulOutcome(
             gamestate,
             shooter,
+            defender,
             t1State,
             t2State,
             team1,
@@ -348,9 +509,11 @@ def ThreePointAttemptEvent(
             collector,
         )
     elif eventOutcome < made3foulCutoff:
+        gamestate.IncrementShotResultCount("Three", "FoulMade")
         Made3FoulOutcome(
             gamestate,
             shooter,
+            defender,
             t1State,
             t2State,
             team1,
@@ -364,7 +527,7 @@ def ThreePointAttemptEvent(
 
 
 def Made3Outcome(
-    gamestate, shooter, team_state, team, receiving_team, isHome, collector
+    gamestate, shooter, defender, team_state, team, receiving_team, isHome, collector
 ):
     printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
     play = printShooter + " 3-point attempt... Score!"
@@ -406,6 +569,7 @@ def Made3Outcome(
 def Missed3Outcome(
     gamestate,
     shooter,
+    defender,
     t1State,
     t2State,
     team_one,
@@ -421,10 +585,14 @@ def Missed3Outcome(
     team_one.Stats.AddThreePointShot(False)
     team_one.Stats.AddFieldGoal(False)
     rebrand = random.random()
-    if rebrand < t1State.OffensiveRebound:
+    off_rebounder = GetRebounder(t1State.Roster)
+    def_rebounder = GetRebounder(t2State.Roster)
+    reb_probability = GetReboundProbability(off_rebounder, def_rebounder)
+    if rebrand < reb_probability:
+        gamestate.IncrementEventCount("OffReb")
         ReboundTheBall(
             gamestate,
-            t1State,
+            off_rebounder,
             team_one,
             gamestate.PossessingTeam,
             h_label,
@@ -433,9 +601,10 @@ def Missed3Outcome(
             collector,
         )
     else:
+        gamestate.IncrementEventCount("DefReb")
         ReboundTheBall(
             gamestate,
-            t2State,
+            def_rebounder,
             team_two,
             receiving_team,
             receiving_label,
@@ -448,6 +617,7 @@ def Missed3Outcome(
 def Blocked3Outcome(
     gamestate,
     shooter,
+    defender,
     t1State,
     t2State,
     team_one,
@@ -458,17 +628,13 @@ def Blocked3Outcome(
     collector,
 ):
     printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
-    pickBlocker = random.choices(
-        t2State.Roster,
-        weights=[x.DefensePer for x in t2State.Roster],
-        k=1,
-    )
-    blocker = pickBlocker[0]
     shooter.Stats.AddFieldGoal(False, 3)
     team_one.Stats.AddThreePointShot(False)
-    blocker.Stats.AddBlock()
+    defender.Stats.AddBlock()
     team_two.Stats.AddBlocks()
-    printBlocker = blocker.Position + " " + blocker.FirstName + " " + blocker.LastName
+    printBlocker = (
+        defender.Position + " " + defender.FirstName + " " + defender.LastName
+    )
     play = (
         printShooter
         + " 3-point attempt...BLOCKED by "
@@ -478,10 +644,14 @@ def Blocked3Outcome(
         + "."
     )
     rebrand = random.random()
-    if rebrand < reboundCutoff:
+    off_rebounder = GetRebounder(t1State.Roster)
+    def_rebounder = GetRebounder(t2State.Roster)
+    reb_probability = GetReboundProbability(off_rebounder, def_rebounder)
+    if rebrand < reb_probability:
+        gamestate.IncrementEventCount("OffReb")
         ReboundTheBall(
             gamestate,
-            t1State,
+            off_rebounder,
             team_one,
             gamestate.PossessingTeam,
             h_label,
@@ -490,9 +660,10 @@ def Blocked3Outcome(
             collector,
         )
     else:
+        gamestate.IncrementEventCount("DefReb")
         ReboundTheBall(
             gamestate,
-            t2State,
+            def_rebounder,
             team_two,
             receiving_team,
             receiving_label,
@@ -505,6 +676,7 @@ def Blocked3Outcome(
 def Missed3FoulOutcome(
     gamestate,
     shooter,
+    defender,
     t1State,
     t2State,
     team_one,
@@ -516,9 +688,15 @@ def Missed3FoulOutcome(
     collector,
 ):
     printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
+    fouling_player = GetFouler(t2State.Roster)
+    fouling_player.AddFoul(gamestate.IsNBA)
+    print_fouler = f"{fouling_player.TeamAbbr} {fouling_player.Position} {fouling_player.FirstName} {fouling_player.LastName}. "
+    if fouling_player.FouledOut:
+        t2State.ReloadRoster()
+        print_fouler += f"It looks like {fouling_player.LastName} has accumulated the maximum limit on fouls and cannot play for the remainder of the game."
     collector.AppendPlay(
         gamestate.PossessingTeam,
-        printShooter + " 3-point attempt... Missed. There is a foul on the play.",
+        f"{printShooter} 3-point attempt... Missed. There is a foul on the play by {print_fouler}",
         "Foul",
         gamestate.T1Points,
         gamestate.T2Points,
@@ -548,6 +726,7 @@ def Missed3FoulOutcome(
 def Made3FoulOutcome(
     gamestate,
     shooter,
+    defender,
     t1State,
     t2State,
     team_one,
@@ -559,7 +738,14 @@ def Made3FoulOutcome(
     collector,
 ):
     printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
-    play = printShooter + " 3-point attempt...Score! Fouled on the play... and one!"
+    fouling_player = GetFouler(t2State.Roster)
+    fouling_player.AddFoul(gamestate.IsNBA)
+    print_fouler = f"Foul called on {fouling_player.TeamAbbr} {fouling_player.Position} {fouling_player.FirstName} {fouling_player.LastName}. "
+    if fouling_player.FouledOut:
+        t2State.ReloadRoster()
+        print_fouler += f"It looks like {fouling_player.LastName} has accumulated the maximum limit on fouls and cannot play for the remainder of the game."
+    play = f"{printShooter} 3-point attempt...Score! Fouled on the play... and one! {print_fouler}"
+
     gamestate.AddPoints(3, isHome)
     shooter.Stats.AddFieldGoal(True, 3)
     team_one.Stats.AddThreePointShot(True)
@@ -621,14 +807,12 @@ def JumperAttemptEvent(
     isHome,
     collector,
 ):
-    pickPlayer = random.choices(
-        t1State.Roster,
-        weights=[x.MidUsage for x in t1State.Roster],
-        k=1,
-    )
-    shooter = pickPlayer[0]
+    shooter = GetShooter(t1State.Roster, 2)
     shooter.Stats.AddPossession()
-    blockAdj = (blockAdjMagicNum1 * t2State.AdjInteriorDef) - blockAdjMagicNum2
+    defender = GetDefender(
+        t2State.DefensiveFormation, t2State.OffensiveStyle, t2State.Roster, shooter
+    )
+    blockAdj = (blockAdjMagicNum1 * defender.AdjInteriorDefense) - blockAdjMagicNum2
     made2jnf = 0
     if shooter.FirstName + " " + shooter.LastName == focus_player:
         made2jnf = (
@@ -656,13 +840,23 @@ def JumperAttemptEvent(
     eventOutcome = random.random()
 
     if eventOutcome < made2jCutoff:
+        gamestate.IncrementShotResultCount("Mid", "Made")
         MadeJumperOutcome(
-            gamestate, shooter, t1State, team1, receiving_team, isHome, collector
+            gamestate,
+            shooter,
+            defender,
+            t1State,
+            team1,
+            receiving_team,
+            isHome,
+            collector,
         )
     elif eventOutcome < missed2jCutoff:
+        gamestate.IncrementShotResultCount("Mid", "Missed")
         MissedJumperOutcome(
             gamestate,
             shooter,
+            defender,
             t1State,
             t2State,
             team1,
@@ -673,9 +867,11 @@ def JumperAttemptEvent(
             collector,
         )
     elif eventOutcome < blocked2jCutoff:
+        gamestate.IncrementShotResultCount("Mid", "Blocked")
         BlockedJumperOutcome(
             gamestate,
             shooter,
+            defender,
             t1State,
             t2State,
             team1,
@@ -686,9 +882,11 @@ def JumperAttemptEvent(
             collector,
         )
     elif eventOutcome < missed2jfoulCutoff:
+        gamestate.IncrementShotResultCount("Mid", "FoulMissed")
         MissedJumperFoulOutcome(
             gamestate,
             shooter,
+            defender,
             t1State,
             t2State,
             team1,
@@ -700,9 +898,11 @@ def JumperAttemptEvent(
             collector,
         )
     elif eventOutcome < made2jfoulCutoff:
+        gamestate.IncrementShotResultCount("Mid", "FoulMade")
         MadeJumperFoulOutcome(
             gamestate,
             shooter,
+            defender,
             t1State,
             t2State,
             team1,
@@ -716,7 +916,7 @@ def JumperAttemptEvent(
 
 
 def MadeJumperOutcome(
-    gamestate, shooter, team_state, team, receiving_team, isHome, collector
+    gamestate, shooter, defender, team_state, team, receiving_team, isHome, collector
 ):
     printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
     play = printShooter + " 2-point jumper... Score!"
@@ -757,6 +957,7 @@ def MadeJumperOutcome(
 def MissedJumperOutcome(
     gamestate,
     shooter,
+    defender,
     t1State,
     t2State,
     team_one,
@@ -771,10 +972,14 @@ def MissedJumperOutcome(
     shooter.Stats.AddFieldGoal(False, 2)
     team_one.Stats.AddFieldGoal(False)
     rebrand = random.random()
-    if rebrand < t1State.OffensiveRebound:
+    off_rebounder = GetRebounder(t1State.Roster)
+    def_rebounder = GetRebounder(t2State.Roster)
+    reb_probability = GetReboundProbability(off_rebounder, def_rebounder)
+    if rebrand < reb_probability:
+        gamestate.IncrementEventCount("OffReb")
         ReboundTheBall(
             gamestate,
-            t1State,
+            off_rebounder,
             team_one,
             gamestate.PossessingTeam,
             h_label,
@@ -783,9 +988,10 @@ def MissedJumperOutcome(
             collector,
         )
     else:
+        gamestate.IncrementEventCount("DefReb")
         ReboundTheBall(
             gamestate,
-            t2State,
+            def_rebounder,
             team_two,
             receiving_team,
             receiving_label,
@@ -798,6 +1004,7 @@ def MissedJumperOutcome(
 def BlockedJumperOutcome(
     gamestate,
     shooter,
+    defender,
     t1State,
     t2State,
     team_one,
@@ -808,17 +1015,13 @@ def BlockedJumperOutcome(
     collector,
 ):
     printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
-    pickBlocker = random.choices(
-        t2State.Roster,
-        weights=[x.DefensePer for x in t2State.Roster],
-        k=1,
-    )
-    blocker = pickBlocker[0]
     shooter.Stats.AddFieldGoal(False, 2)
     team_one.Stats.AddFieldGoal(False)
-    blocker.Stats.AddBlock()
+    defender.Stats.AddBlock()
     team_two.Stats.AddBlocks()
-    printBlocker = blocker.Position + " " + blocker.FirstName + " " + blocker.LastName
+    printBlocker = (
+        defender.Position + " " + defender.FirstName + " " + defender.LastName
+    )
     play = (
         printShooter
         + " 2-point jumper...BLOCKED by "
@@ -828,10 +1031,14 @@ def BlockedJumperOutcome(
         + "."
     )
     rebrand = random.random()
-    if rebrand < reboundCutoff:
+    off_rebounder = GetRebounder(t1State.Roster)
+    def_rebounder = GetRebounder(t2State.Roster)
+    reb_probability = GetReboundProbability(off_rebounder, def_rebounder)
+    if rebrand < reb_probability:
+        gamestate.IncrementEventCount("OffReb")
         ReboundTheBall(
             gamestate,
-            t1State,
+            off_rebounder,
             team_one,
             gamestate.PossessingTeam,
             h_label,
@@ -840,9 +1047,10 @@ def BlockedJumperOutcome(
             collector,
         )
     else:
+        gamestate.IncrementEventCount("DefReb")
         ReboundTheBall(
             gamestate,
-            t2State,
+            def_rebounder,
             team_two,
             receiving_team,
             receiving_label,
@@ -855,6 +1063,7 @@ def BlockedJumperOutcome(
 def MissedJumperFoulOutcome(
     gamestate,
     shooter,
+    defender,
     t1State,
     t2State,
     team_one,
@@ -866,9 +1075,16 @@ def MissedJumperFoulOutcome(
     collector,
 ):
     printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
+    fouling_player = GetFouler(t2State.Roster)
+    fouling_player.AddFoul(gamestate.IsNBA)
+    print_fouler = f"{fouling_player.TeamAbbr} {fouling_player.Position} {fouling_player.FirstName} {fouling_player.LastName}. "
+    if fouling_player.FouledOut:
+        t2State.ReloadRoster()
+        print_fouler += f"It looks like {fouling_player.LastName} has accumulated the maximum limit on fouls and cannot play for the remainder of the game."
     collector.AppendPlay(
         gamestate.PossessingTeam,
-        printShooter + " 2-point jumper... Missed with a foul on the play.",
+        printShooter
+        + f" 2-point jumper... Missed with a foul on the play by {print_fouler}",
         "Foul",
         gamestate.T1Points,
         gamestate.T2Points,
@@ -897,6 +1113,7 @@ def MissedJumperFoulOutcome(
 def MadeJumperFoulOutcome(
     gamestate,
     shooter,
+    defender,
     t1State,
     t2State,
     team_one,
@@ -908,7 +1125,13 @@ def MadeJumperFoulOutcome(
     collector,
 ):
     printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
-    play = printShooter + " 2-point jumper...Score! Foul on the play and one!"
+    fouling_player = GetFouler(t2State.Roster)
+    fouling_player.AddFoul(gamestate.IsNBA)
+    print_fouler = f"{fouling_player.TeamAbbr} {fouling_player.Position} {fouling_player.FirstName} {fouling_player.LastName}. "
+    if fouling_player.FouledOut:
+        t2State.ReloadRoster()
+        print_fouler += f"It looks like {fouling_player.LastName} has accumulated the maximum limit on fouls and cannot play for the remainder of the game."
+    play = f"{printShooter} 2-point jumper...Score! Foul on the play and one! Foul was called on {print_fouler}"
     gamestate.AddPoints(2, isHome)
     shooter.Stats.AddFieldGoal(True, 2)
     team_one.Stats.AddFieldGoal(True)
@@ -921,6 +1144,7 @@ def MadeJumperFoulOutcome(
         gamestate.Quarter,
     )
     team_one.Stats.CalculateLead(2, gamestate.T1Points - gamestate.T2Points)
+    team_two.Stats.AddFoul()
     assistRand = random.random()
     if assistRand > assistJumperCutoff:
         assister = SelectAssister(shooter, t1State)
@@ -969,14 +1193,12 @@ def InsideAttemptEvent(
     isHome,
     collector,
 ):
-    pickPlayer = random.choices(
-        t1State.Roster,
-        weights=[x.InsideUsage for x in t1State.Roster],
-        k=1,
-    )
-    shooter = pickPlayer[0]
+    shooter = GetShooter(t1State.Roster, 3)
     shooter.Stats.AddPossession()
-    blockAdj = (blockAdjMagicNum1 * t2State.AdjInteriorDef) - blockAdjMagicNum2
+    defender = GetDefender(
+        t2State.DefensiveFormation, t2State.OffensiveStyle, t2State.Roster, shooter
+    )
+    blockAdj = (blockAdjMagicNum1 * defender.AdjInteriorDefense) - blockAdjMagicNum2
     made2inf = 0
     if shooter.FirstName + " " + shooter.LastName == focus_player:
         made2inf = (
@@ -1004,13 +1226,23 @@ def InsideAttemptEvent(
     eventOutcome = random.random()
 
     if eventOutcome < made2inCutoff:
+        gamestate.IncrementShotResultCount("Inside", "Made")
         MadeInsideOutcome(
-            gamestate, shooter, t1State, team1, receiving_team, isHome, collector
+            gamestate,
+            shooter,
+            defender,
+            t1State,
+            team1,
+            receiving_team,
+            isHome,
+            collector,
         )
     elif eventOutcome < missed2inCutoff:
+        gamestate.IncrementShotResultCount("Inside", "Missed")
         MissedInsideOutcome(
             gamestate,
             shooter,
+            defender,
             t1State,
             t2State,
             team1,
@@ -1021,9 +1253,11 @@ def InsideAttemptEvent(
             collector,
         )
     elif eventOutcome < blocked2inCutoff:
+        gamestate.IncrementShotResultCount("Inside", "Blocked")
         BlockedInsideOutcome(
             gamestate,
             shooter,
+            defender,
             t1State,
             t2State,
             team1,
@@ -1034,9 +1268,11 @@ def InsideAttemptEvent(
             collector,
         )
     elif eventOutcome < missed2infoulCutoff:
+        gamestate.IncrementShotResultCount("Inside", "FoulMissed")
         MissedInsideFoulOutcome(
             gamestate,
             shooter,
+            defender,
             t1State,
             t2State,
             team1,
@@ -1048,9 +1284,11 @@ def InsideAttemptEvent(
             collector,
         )
     elif eventOutcome < made2infoulCutoff:
+        gamestate.IncrementShotResultCount("Inside", "FoulMade")
         MadeInsideFoulOutcome(
             gamestate,
             shooter,
+            defender,
             t1State,
             t2State,
             team1,
@@ -1064,7 +1302,7 @@ def InsideAttemptEvent(
 
 
 def MadeInsideOutcome(
-    gamestate, shooter, team_state, team, receiving_team, isHome, collector
+    gamestate, shooter, defender, team_state, team, receiving_team, isHome, collector
 ):
     printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
     play = printShooter + " Inside shot... Score!"
@@ -1105,6 +1343,7 @@ def MadeInsideOutcome(
 def MissedInsideOutcome(
     gamestate,
     shooter,
+    defender,
     t1State,
     t2State,
     team_one,
@@ -1119,10 +1358,14 @@ def MissedInsideOutcome(
     shooter.Stats.AddFieldGoal(False, 2)
     team_one.Stats.AddFieldGoal(False)
     rebrand = random.random()
-    if rebrand < t1State.OffensiveRebound:
+    off_rebounder = GetRebounder(t1State.Roster)
+    def_rebounder = GetRebounder(t2State.Roster)
+    reb_probability = GetReboundProbability(off_rebounder, def_rebounder)
+    if rebrand < reb_probability:
+        gamestate.IncrementEventCount("OffReb")
         ReboundTheBall(
             gamestate,
-            t1State,
+            off_rebounder,
             team_one,
             gamestate.PossessingTeam,
             h_label,
@@ -1131,9 +1374,10 @@ def MissedInsideOutcome(
             collector,
         )
     else:
+        gamestate.IncrementEventCount("DefReb")
         ReboundTheBall(
             gamestate,
-            t2State,
+            def_rebounder,
             team_two,
             receiving_team,
             receiving_label,
@@ -1146,6 +1390,7 @@ def MissedInsideOutcome(
 def BlockedInsideOutcome(
     gamestate,
     shooter,
+    defender,
     t1State,
     t2State,
     team_one,
@@ -1156,17 +1401,13 @@ def BlockedInsideOutcome(
     collector,
 ):
     printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
-    pickBlocker = random.choices(
-        t2State.Roster,
-        weights=[x.DefensePer for x in t2State.Roster],
-        k=1,
-    )
-    blocker = pickBlocker[0]
     shooter.Stats.AddFieldGoal(False, 2)
     team_one.Stats.AddFieldGoal(False)
-    blocker.Stats.AddBlock()
+    defender.Stats.AddBlock()
     team_two.Stats.AddBlocks()
-    printBlocker = blocker.Position + " " + blocker.FirstName + " " + blocker.LastName
+    printBlocker = (
+        defender.Position + " " + defender.FirstName + " " + defender.LastName
+    )
     play = (
         printShooter
         + " Inside shot... BLOCKED by "
@@ -1176,10 +1417,14 @@ def BlockedInsideOutcome(
         + "."
     )
     rebrand = random.random()
-    if rebrand < reboundCutoff:
+    off_rebounder = GetRebounder(t1State.Roster)
+    def_rebounder = GetRebounder(t2State.Roster)
+    reb_probability = GetReboundProbability(off_rebounder, def_rebounder)
+    if rebrand < reb_probability:
+        gamestate.IncrementEventCount("OffReb")
         ReboundTheBall(
             gamestate,
-            t1State,
+            off_rebounder,
             team_one,
             gamestate.PossessingTeam,
             h_label,
@@ -1188,9 +1433,10 @@ def BlockedInsideOutcome(
             collector,
         )
     else:
+        gamestate.IncrementEventCount("DefReb")
         ReboundTheBall(
             gamestate,
-            t2State,
+            def_rebounder,
             team_two,
             receiving_team,
             receiving_label,
@@ -1203,6 +1449,7 @@ def BlockedInsideOutcome(
 def MissedInsideFoulOutcome(
     gamestate,
     shooter,
+    defender,
     t1State,
     t2State,
     team_one,
@@ -1214,9 +1461,15 @@ def MissedInsideFoulOutcome(
     collector,
 ):
     printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
+    fouling_player = GetFouler(t2State.Roster)
+    fouling_player.AddFoul(gamestate.IsNBA)
+    print_fouler = f"{fouling_player.TeamAbbr} {fouling_player.Position} {fouling_player.FirstName} {fouling_player.LastName}. "
+    if fouling_player.FouledOut:
+        t2State.ReloadRoster()
+        print_fouler += f"It looks like {fouling_player.LastName} has accumulated the maximum limit on fouls and cannot play for the remainder of the game."
     collector.AppendPlay(
         gamestate.PossessingTeam,
-        printShooter + " Inside shot... Missed with a foul on the play.",
+        f"{printShooter} Inside shot... Missed with a foul on the play by {print_fouler}",
         "Foul",
         gamestate.T1Points,
         gamestate.T2Points,
@@ -1245,6 +1498,7 @@ def MissedInsideFoulOutcome(
 def MadeInsideFoulOutcome(
     gamestate,
     shooter,
+    defender,
     t1State,
     t2State,
     team_one,
@@ -1256,7 +1510,15 @@ def MadeInsideFoulOutcome(
     collector,
 ):
     printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
-    play = printShooter + " Inside shot...Score! Foul on the play and one!"
+    fouling_player = GetFouler(t2State.Roster)
+    fouling_player.AddFoul(gamestate.IsNBA)
+    print_fouler = f"{fouling_player.TeamAbbr} {fouling_player.Position} {fouling_player.FirstName} {fouling_player.LastName} was called on the foul. "
+    if fouling_player.FouledOut:
+        t2State.ReloadRoster()
+        print_fouler += f"It looks like {fouling_player.LastName} has accumulated the maximum limit on fouls and cannot play for the remainder of the game."
+    play = (
+        f"{printShooter} Inside shot...Score! Foul on the play and one! {print_fouler}"
+    )
     gamestate.AddPoints(2, isHome)
     shooter.Stats.AddFieldGoal(True, 2)
     team_one.Stats.AddFieldGoal(True)
@@ -1268,6 +1530,7 @@ def MadeInsideFoulOutcome(
         gamestate.IsNBA,
         gamestate.Quarter,
     )
+    team_two.Stats.AddFoul()
     team_one.Stats.CalculateLead(2, gamestate.T1Points - gamestate.T2Points)
     assistRand = random.random()
     if assistRand > assistInsideCutoff:

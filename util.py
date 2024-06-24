@@ -1,4 +1,5 @@
 import re
+import random
 
 
 def Get_Inches(height):
@@ -29,3 +30,15 @@ def GetBooleanValue(str_value):
     if str_value == 1 or str_value == "1":
         return True
     return False
+
+
+def GetInjurySeverity(name):
+    severity_rating = random.random()
+    if severity_rating < 0.7:
+        return "Mild"
+    elif (severity_rating < 0.9 and name != "Knee") or (
+        severity_rating < 0.98 and name == "Knee"
+    ):
+        return "Moderate"
+    else:
+        return "Severe"

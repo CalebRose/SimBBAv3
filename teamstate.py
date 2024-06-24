@@ -5,6 +5,9 @@ from baseprobabilities import *
 
 class TeamState:
     def __init__(self):
+        self.OffensiveFormation = ""
+        self.DefensiveFormation = ""
+        self.OffensiveStyle = ""
         self.InsShootingBonus = 0
         self.MidShootingBonus = 0
         self.t3ptShootingBonus = 0
@@ -52,7 +55,9 @@ class TeamState:
         self.Roster = []
         self.FocusPlayer = 0
 
-    def SetOffensiveBonuses(self, formation):
+    def SetOffensiveBonuses(self, formation, style):
+        self.OffensiveFormation = formation
+        self.OffensiveStyle = style
         if formation == "Motion":
             self.InsShootingBonus += 1.5
             self.t3ptShootingBonus += 0.5
@@ -75,6 +80,7 @@ class TeamState:
             self.ReboundingBonus -= 0.5
 
     def SetDefensiveBonus(self, formation):
+        self.DefensiveFormation = formation
         if formation == "1-3-1 Zone":
             self.TurnoverBonus += 0.5
         elif formation == "2-3 Zone":
@@ -124,7 +130,11 @@ class TeamState:
                 self.ReboundingBonus,
                 matchType,
             )
-            cp.get_advanced_stats(
+            self.Roster.append(cp)
+
+    def ReloadRoster(self):
+        for x in self.Roster:
+            x.get_advanced_stats(
                 self.Rebounding,
                 self.StealBlock,
                 self.Ballwork,
@@ -133,7 +143,6 @@ class TeamState:
                 self.T3ptPro,
                 self.TurnoverBonus,
             )
-            self.Roster.append(cp)
 
     def SetDefensiveAttributes(self):
         self.Height = round(sum(cp.Height for cp in self.Roster))
@@ -214,24 +223,24 @@ class TeamState:
             if isNBA == True:
                 self.Pace = random.randint(105, 110)
             else:
-                self.Pace = random.randint(80, 85)
+                self.Pace = random.randint(75, 80)
         elif pace == "Fast":
             if isNBA:
                 self.Pace = random.randint(100, 105)
             else:
-                self.Pace = random.randint(75, 80)
+                self.Pace = random.randint(70, 75)
         elif pace == "Balanced":
             if isNBA:
                 self.Pace = random.randint(95, 100)
             else:
-                self.Pace = random.randint(70, 75)
+                self.Pace = random.randint(65, 70)
         elif pace == "Slow":
             if isNBA:
                 self.Pace = random.randint(90, 95)
             else:
-                self.Pace = random.randint(65, 70)
+                self.Pace = random.randint(60, 65)
         elif pace == "Very Slow":
             if isNBA:
                 self.Pace = random.randint(85, 90)
             else:
-                self.Pace = random.randint(60, 65)
+                self.Pace = random.randint(55, 60)

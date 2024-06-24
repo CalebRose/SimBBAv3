@@ -37,6 +37,7 @@ if testing == False:
             is_neutral = match["IsNeutralSite"]
             match_id = str(match["ID"])
             arena = match["Arena"]
+            capacity = match["Capacity"]
             city = match["City"]
             state = match["State"]
 
@@ -52,6 +53,7 @@ if testing == False:
                 match_type,
                 match_name,
                 arena,
+                capacity,
                 city,
                 state,
             )
@@ -88,6 +90,7 @@ else:
             ):
                 continue
             is_nba = row[4]
+            capacity = int(row[7])
             results = rungame(
                 row[0],
                 row[1],
@@ -100,6 +103,7 @@ else:
                 matchType,
                 "",
                 "",
+                capacity,
                 "",
                 "",
             )
