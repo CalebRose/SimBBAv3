@@ -40,6 +40,9 @@ class GameState:
         self.StealEvents = 0
         self.Offensive_Rebounds = 0
         self.Defensive_Rebounds = 0
+        self.ReboundingPlayer = None
+        self.OffTheRebound = False
+        self.Capacity = 0
 
     def SetInitialValues(self, neutral, nba_match):
         if neutral == False:
@@ -52,6 +55,7 @@ class GameState:
         self.IsNBA = nba_match
 
     def SetGameHCA(self, capacity):
+        self.Capacity = capacity
         if self.IsNeutral:
             self.HCA = 0
             self.HCAAdj = 0
@@ -64,6 +68,10 @@ class GameState:
     def SetPossessions(self, t1Pace, t2Pace):
         self.Total_Possessions = t1Pace + t2Pace
         self.Halftime_Point = self.Total_Possessions / 2
+
+    def ToggleOffRebound(self):
+        self.OffTheRebound = False
+        self.ReboundingPlayer = None
 
     def IncrementPossessions(self):
         self.PossessionNumber += 1
@@ -86,8 +94,10 @@ class GameState:
         ):
             self.Quarter = 4
 
-    def DecrementPossessions(self):
+    def DecrementPossessions(self, rebounder):
         self.PossessionNumber -= 1
+        self.ReboundingPlayer = rebounder
+        self.OffTheRebound = True
 
     def SetOvertime(self):
         self.IsOT = True

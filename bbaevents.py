@@ -1,6 +1,11 @@
 import random
 from constants import *
 import util
+from play_by_play_generator import *
+
+
+def GetPlayerLabel(player):
+    return f"{player.TeamAbbr} {player.Position} {player.FirstName} {player.LastName}"
 
 
 def GetTipoffPossession(
@@ -79,15 +84,20 @@ def GetReboundProbability(offReb, defReb):
     return probability
 
 
-def StealEvent(gamestate, roster, team1, team2, t, label, collector):
-    pickPlayer = random.choices(roster, weights=[x.DefensePer for x in roster], k=1)
+def StealEvent(gamestate, t2roster, t1Roster, team1, team2, t, label, collector):
+    pickPlayer = random.choices(t2roster, weights=[x.DefensePer for x in t2roster], k=1)
     stealPlayer = pickPlayer[0]
     stealPlayer.Stats.AddPossession()
     stealPlayer.Stats.AddSteal()
+    possessing_player = random.choices(
+        t1Roster, weights=[x.Usage for x in t1Roster], k=1
+    )
+    pos_player = possessing_player[0]
     team1.Stats.AddTurnover()
     team2.Stats.AddSteal()
-    printShooter = stealPlayer.FirstName + " " + stealPlayer.LastName
-    msg = printShooter + " steals the ball for " + label + "!"
+    printPlayer = GetPlayerLabel(pos_player)
+    printShooter = GetPlayerLabel(stealPlayer)
+    msg = GenerateStealBallText(printPlayer, printShooter, gamestate.PossessingTeam, t)
     gamestate.SetPossessingTeam(t)
     collector.AppendPlay(
         t,
@@ -101,7 +111,7 @@ def StealEvent(gamestate, roster, team1, team2, t, label, collector):
 
 
 def OtherTurnoverEvent(
-    gamestate, tState, team, receiving_team, receiving_label, collector
+    gamestate, tState, t2State, team, receiving_team, receiving_label, collector
 ):
     otherTO = random.random()
     pickPlayer = random.choices(
@@ -110,18 +120,22 @@ def OtherTurnoverEvent(
     toPlayer = pickPlayer[0]
     toPlayer.Stats.AddPossession()
     toPlayer.Stats.AddTurnover()
-    printShooter = (
-        toPlayer.Position + " " + toPlayer.FirstName + " " + toPlayer.LastName
-    )
+    printShooter = GetPlayerLabel(toPlayer)
     team.Stats.AddTurnover()
+    assister = SelectAssister(toPlayer, tState)
+    ast_label = GetPlayerLabel(assister)
+    defender = random.choices(
+        t2State.Roster, weights=[x.Usage for x in t2State.Roster], k=1
+    )
+    defPlayer = defender[0]
+    def_label = GetPlayerLabel(defPlayer)
     if otherTO < outOfBoundsCutoff:
-        msg = (
-            gamestate.PossessingTeam
-            + " "
-            + printShooter
-            + " lost the ball out of bounds. "
-            + receiving_label
-            + " now has the possession."
+        msg = GenerateOutOfBoundsText(
+            printShooter,
+            ast_label,
+            def_label,
+            gamestate.PossessingTeam,
+            receiving_label,
         )
         collector.AppendPlay(
             receiving_team,
@@ -133,13 +147,8 @@ def OtherTurnoverEvent(
             gamestate.Total_Possessions,
         )
     elif otherTO < shotClockViolationCutoff:
-        msg = (
-            receiving_team
-            + ": Shot clock violation on "
-            + gamestate.PossessingTeam
-            + " "
-            + printShooter
-            + "."
+        msg = GenerateShotClockViolationText(
+            toPlayer, ast_label, def_label, gamestate.PossessingTeam, receiving_team
         )
         collector.AppendPlay(
             receiving_team,
@@ -151,7 +160,10 @@ def OtherTurnoverEvent(
             gamestate.Total_Possessions,
         )
     elif otherTO < offensiveFoulCutoff:
-        msg = f"{receiving_team}: Offensive foul on {gamestate.PossessingTeam} {printShooter}."
+        toLabel = GetPlayerLabel(toPlayer)
+        msg = GenerateOffensiveFoulText(
+            toLabel, ast_label, def_label, gamestate.PossessingTeam, receiving_team
+        )
         toPlayer.AddFoul(gamestate.IsNBA)
         if toPlayer.FouledOut == True:
             tState.ReloadRoster()
@@ -180,10 +192,9 @@ def ReboundTheBall(
 ):
     rebounder.Stats.AddRebound(is_offense)
     team.Stats.AddRebound(is_offense)
-    printRebounder = (
-        rebounder.Position + " " + rebounder.FirstName + " " + rebounder.LastName
-    )
-    message = play + " Rebounded by " + receiving_label + " " + printRebounder + "."
+    printRebounder = GetPlayerLabel(rebounder)
+    reb_text = GenerateReboundText(printRebounder, receiving_label, is_offense)
+    message = play + reb_text
     collector.AppendPlay(
         gamestate.PossessingTeam,
         message,
@@ -194,7 +205,7 @@ def ReboundTheBall(
         gamestate.Total_Possessions,
     )
     if is_offense:
-        gamestate.DecrementPossessions()
+        gamestate.DecrementPossessions(rebounder)
     gamestate.SetPossessingTeam(receiving_team)
 
 
@@ -222,9 +233,9 @@ def ConductFoulShots(
 ):
     shots = foulShots
     ftCutoff = (ftMagicNum1 * shooter.FreeThrow) + ftMagicNum2
+    player_label = GetPlayerLabel(shooter)
     while shots > 0:
         if random.random() <= ftCutoff:
-            msg = "Free throw coming up... good!"
             gamestate.AddPoints(1, isHome)
             team_one.Stats.AddPoints(
                 1,
@@ -238,6 +249,15 @@ def ConductFoulShots(
             shooter.Stats.AddFTMade()
             team_one.Stats.AddFreeThrow(True)
             shots -= 1
+            msg = GenerateFreeThrowText(
+                player_label,
+                isHome,
+                True,
+                home_label,
+                receiving_label,
+                gamestate.Capacity,
+                shots,
+            )
             collector.AppendPlay(
                 gamestate.PossessingTeam,
                 msg,
@@ -250,10 +270,18 @@ def ConductFoulShots(
             if shots == 0:
                 gamestate.SetPossessingTeam(receiving_team)
         else:
-            play = "Free throw coming up... rattled out."
             shooter.Stats.AddFTAttempt()
             team_one.Stats.AddFreeThrow(False)
             shots -= 1
+            play = GenerateFreeThrowText(
+                player_label,
+                isHome,
+                False,
+                home_label,
+                receiving_label,
+                gamestate.Capacity,
+                shots,
+            )
             if shots == 0:
                 rebrand = random.random()
                 off_rebounder = GetRebounder(t1State.Roster)
@@ -423,6 +451,8 @@ def ThreePointAttemptEvent(
     collector,
 ):
     shooter = GetShooter(t1State.Roster, 1)
+    if gamestate.OffTheRebound == True and gamestate.ReboundingPlayer != None:
+        shooter = gamestate.ReboundingPlayer
     shooter.Stats.AddPossession()
     defender = GetDefender(
         t2State.DefensiveFormation, t2State.OffensiveStyle, t2State.Roster, shooter
@@ -432,12 +462,16 @@ def ThreePointAttemptEvent(
     blockAdj = (blockAdjMagicNum1 * defender.AdjPerimeterDefense) - blockAdjMagicNum2
     made3nf = 0
     if shooter.FirstName + " " + shooter.LastName == focus_player:
-        made3nf = (made3nfMagicNum1 * (shooter.Shooting3 - 4)) + made3nfMagicNum2
+        made3nf = three_base + (
+            three_adj * ((shooter.Shooting3 - 4) - defender.PerimeterDefense)
+        )
     else:
-        made3nf = (made3nfMagicNum1 * shooter.Shooting3) + made3nfMagicNum2
-    if gamestate.IsNeutral != True and isHome == True:
-        made3nf += gamestate.HCA
-    madeDiff = made3nf - madeDiffMagicNum1
+        made3nf = three_base + (
+            three_adj * ((shooter.Shooting3) - defender.PerimeterDefense)
+        )
+    if gamestate.IsNeutral != True and isHome == False:
+        made3nf -= gamestate.HCA
+    madeDiff = made3nf
     missed3nf = missed3nfMagicNum1 - madeDiff - blockAdj
     made3foul = made3fMagicNum1
     missed3foul = missed3foulMagicNum
@@ -476,6 +510,7 @@ def ThreePointAttemptEvent(
             receiving_team,
             receiving_label,
             collector,
+            isHome,
         )
     elif eventOutcome < blocked3Cutoff:
         gamestate.IncrementShotResultCount("Three", "Blocked")
@@ -491,6 +526,7 @@ def ThreePointAttemptEvent(
             receiving_team,
             receiving_label,
             collector,
+            isHome,
         )
     elif eventOutcome < missed3foulCutoff:
         gamestate.IncrementShotResultCount("Three", "FoulMissed")
@@ -529,10 +565,9 @@ def ThreePointAttemptEvent(
 def Made3Outcome(
     gamestate, shooter, defender, team_state, team, receiving_team, isHome, collector
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
-    play = printShooter + " 3-point attempt... Score!"
+    printDefender = GetPlayerLabel(defender)
+    printAssister = ""
     gamestate.AddPoints(3, isHome)
-    shooter.Stats.AddFieldGoal(True, 3)
     team.Stats.AddPoints(
         3,
         gamestate.PossessionNumber,
@@ -548,12 +583,27 @@ def Made3Outcome(
     if assistRand > assistCutoff:
         assister = SelectAssister(shooter, team_state)
         if assister.ID != shooter.ID:
+            if gamestate.OffTheRebound == True:
+                shooter = assister
+                assister = gamestate.ReboundingPlayer
+                gamestate.ToggleOffRebound()
             assister.Stats.AddAssist()
             team.Stats.AddAssist()
-            printAssister = (
-                assister.Position + " " + assister.FirstName + " " + assister.LastName
-            )
-            play += " Assisted by: " + printAssister
+            printAssister = GetPlayerLabel(assister)
+    shooter.Stats.AddFieldGoal(True, 3)
+    printShooter = GetPlayerLabel(shooter)
+    play = GenerateThreePointText(
+        printShooter,
+        printDefender,
+        printAssister,
+        gamestate.OffTheRebound,
+        "",
+        False,
+        isHome,
+        gamestate.Capacity,
+        1,
+        gamestate.PossessingTeam,
+    )
     collector.AppendPlay(
         gamestate.PossessingTeam,
         play,
@@ -578,12 +628,25 @@ def Missed3Outcome(
     receiving_team,
     receiving_label,
     collector,
+    isHome,
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
-    play = printShooter + " 3-point attempt...Missed!"
+    printShooter = GetPlayerLabel(shooter)
+    printDefender = GetPlayerLabel(defender)
     shooter.Stats.AddFieldGoal(False, 3)
     team_one.Stats.AddThreePointShot(False)
     team_one.Stats.AddFieldGoal(False)
+    play = GenerateThreePointText(
+        printShooter,
+        printDefender,
+        "",
+        gamestate.OffTheRebound,
+        "",
+        False,
+        isHome,
+        gamestate.Capacity,
+        2,
+        gamestate.PossessingTeam,
+    )
     rebrand = random.random()
     off_rebounder = GetRebounder(t1State.Roster)
     def_rebounder = GetRebounder(t2State.Roster)
@@ -626,22 +689,25 @@ def Blocked3Outcome(
     receiving_team,
     receiving_label,
     collector,
+    isHome,
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
+    printShooter = GetPlayerLabel(shooter)
+    printDefender = GetPlayerLabel(defender)
     shooter.Stats.AddFieldGoal(False, 3)
     team_one.Stats.AddThreePointShot(False)
     defender.Stats.AddBlock()
     team_two.Stats.AddBlocks()
-    printBlocker = (
-        defender.Position + " " + defender.FirstName + " " + defender.LastName
-    )
-    play = (
-        printShooter
-        + " 3-point attempt...BLOCKED by "
-        + receiving_team
-        + " "
-        + printBlocker
-        + "."
+    play = GenerateThreePointText(
+        printShooter,
+        printDefender,
+        "",
+        gamestate.OffTheRebound,
+        "",
+        False,
+        isHome,
+        gamestate.Capacity,
+        3,
+        gamestate.PossessingTeam,
     )
     rebrand = random.random()
     off_rebounder = GetRebounder(t1State.Roster)
@@ -687,16 +753,28 @@ def Missed3FoulOutcome(
     isHome,
     collector,
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
+    printShooter = GetPlayerLabel(shooter)
+    printDefender = GetPlayerLabel(defender)
     fouling_player = GetFouler(t2State.Roster)
     fouling_player.AddFoul(gamestate.IsNBA)
-    print_fouler = f"{fouling_player.TeamAbbr} {fouling_player.Position} {fouling_player.FirstName} {fouling_player.LastName}. "
+    print_fouler = f"{fouling_player.TeamAbbr} {fouling_player.Position} {fouling_player.FirstName} {fouling_player.LastName}"
     if fouling_player.FouledOut:
         t2State.ReloadRoster()
-        print_fouler += f"It looks like {fouling_player.LastName} has accumulated the maximum limit on fouls and cannot play for the remainder of the game."
+    play = GenerateThreePointText(
+        printShooter,
+        printDefender,
+        "",
+        gamestate.OffTheRebound,
+        print_fouler,
+        fouling_player.FouledOut,
+        isHome,
+        gamestate.Capacity,
+        4,
+        gamestate.PossessingTeam,
+    )
     collector.AppendPlay(
         gamestate.PossessingTeam,
-        f"{printShooter} 3-point attempt... Missed. There is a foul on the play by {print_fouler}",
+        play,
         "Foul",
         gamestate.T1Points,
         gamestate.T2Points,
@@ -737,17 +815,15 @@ def Made3FoulOutcome(
     isHome,
     collector,
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
+    printDefender = GetPlayerLabel(defender)
+    printAssister = ""
     fouling_player = GetFouler(t2State.Roster)
     fouling_player.AddFoul(gamestate.IsNBA)
-    print_fouler = f"Foul called on {fouling_player.TeamAbbr} {fouling_player.Position} {fouling_player.FirstName} {fouling_player.LastName}. "
+    fouling_label = GetPlayerLabel(fouling_player)
     if fouling_player.FouledOut:
         t2State.ReloadRoster()
-        print_fouler += f"It looks like {fouling_player.LastName} has accumulated the maximum limit on fouls and cannot play for the remainder of the game."
-    play = f"{printShooter} 3-point attempt...Score! Fouled on the play... and one! {print_fouler}"
 
     gamestate.AddPoints(3, isHome)
-    shooter.Stats.AddFieldGoal(True, 3)
     team_one.Stats.AddThreePointShot(True)
     team_one.Stats.AddPoints(
         3,
@@ -763,12 +839,28 @@ def Made3FoulOutcome(
     if assistRand > assistCutoff:
         assister = SelectAssister(shooter, t1State)
         if assister.ID != shooter.ID:
+            if gamestate.OffTheRebound == True:
+                shooter = assister
+                assister = gamestate.ReboundingPlayer
+                gamestate.ToggleOffRebound()
             assister.Stats.AddAssist()
             team_one.Stats.AddAssist()
-            printAssister = (
-                assister.Position + " " + assister.FirstName + " " + assister.LastName
-            )
-            play += " Assisted by: " + printAssister
+            printAssister = GetPlayerLabel(assister)
+    printShooter = GetPlayerLabel(shooter)
+    play = GenerateThreePointText(
+        printShooter,
+        printDefender,
+        printAssister,
+        gamestate.OffTheRebound,
+        fouling_label,
+        fouling_player.FouledOut,
+        isHome,
+        gamestate.Capacity,
+        5,
+        gamestate.PossessingTeam,
+    )
+    shooter.Stats.AddFieldGoal(True, 3)
+    # Add play generation text
     collector.AppendPlay(
         gamestate.PossessingTeam,
         play,
@@ -808,6 +900,8 @@ def JumperAttemptEvent(
     collector,
 ):
     shooter = GetShooter(t1State.Roster, 2)
+    if gamestate.OffTheRebound == True and gamestate.ReboundingPlayer != None:
+        shooter = gamestate.ReboundingPlayer
     shooter.Stats.AddPossession()
     defender = GetDefender(
         t2State.DefensiveFormation, t2State.OffensiveStyle, t2State.Roster, shooter
@@ -815,17 +909,15 @@ def JumperAttemptEvent(
     blockAdj = (blockAdjMagicNum1 * defender.AdjInteriorDefense) - blockAdjMagicNum2
     made2jnf = 0
     if shooter.FirstName + " " + shooter.LastName == focus_player:
-        made2jnf = (
-            (made2jnfMagicNum1 * (shooter.Shooting2 - 4))
-            + made2jnfMagicNum2
-            + gamestate.HCA
+        made2jnf = mid_base + (
+            mid_adj * ((shooter.Shooting2 - 4) - defender.PerimeterDefense)
         )
     else:
-        made2jnf = (
-            (made2jnfMagicNum1 * shooter.Shooting2) + made2jnfMagicNum2 + gamestate.HCA
+        made2jnf = mid_base + (
+            mid_adj * ((shooter.Shooting2) - defender.PerimeterDefense)
         )
-    if gamestate.IsNeutral != True and isHome == True:
-        made2jnf += gamestate.HCA
+    if gamestate.IsNeutral != True and isHome == False:
+        made2jnf -= gamestate.HCA
     madeDiff = made2jnf - made2jnfDiffMagicNum1
     missed2jnf = missed2jnfMagicNum1 - madeDiff - blockAdj
     made2jfoul = made2jfoulMagicNum
@@ -865,6 +957,7 @@ def JumperAttemptEvent(
             receiving_team,
             receiving_label,
             collector,
+            isHome,
         )
     elif eventOutcome < blocked2jCutoff:
         gamestate.IncrementShotResultCount("Mid", "Blocked")
@@ -880,6 +973,7 @@ def JumperAttemptEvent(
             receiving_team,
             receiving_label,
             collector,
+            isHome,
         )
     elif eventOutcome < missed2jfoulCutoff:
         gamestate.IncrementShotResultCount("Mid", "FoulMissed")
@@ -918,10 +1012,9 @@ def JumperAttemptEvent(
 def MadeJumperOutcome(
     gamestate, shooter, defender, team_state, team, receiving_team, isHome, collector
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
-    play = printShooter + " 2-point jumper... Score!"
+    printDefender = GetPlayerLabel(defender)
+    printAssister = ""
     gamestate.AddPoints(2, isHome)
-    shooter.Stats.AddFieldGoal(True, 2)
     team.Stats.AddPoints(
         2,
         gamestate.PossessionNumber,
@@ -936,12 +1029,27 @@ def MadeJumperOutcome(
     if assistRand > assistJumperCutoff:
         assister = SelectAssister(shooter, team_state)
         if assister.ID != shooter.ID:
+            if gamestate.OffTheRebound == True:
+                shooter = assister
+                assister = gamestate.ReboundingPlayer
+                gamestate.ToggleOffRebound()
+            printAssister = GetPlayerLabel(assister)
             assister.Stats.AddAssist()
             team.Stats.AddAssist()
-            printAssister = (
-                assister.Position + " " + assister.FirstName + " " + assister.LastName
-            )
-            play += " Assisted by: " + printAssister
+    printShooter = GetPlayerLabel(shooter)
+    shooter.Stats.AddFieldGoal(True, 2)
+    play = GenerateMidShotText(
+        printShooter,
+        printDefender,
+        printAssister,
+        gamestate.OffTheRebound,
+        "",
+        False,
+        isHome,
+        gamestate.Capacity,
+        1,
+        gamestate.PossessingTeam,
+    )
     collector.AppendPlay(
         gamestate.PossessingTeam,
         play,
@@ -966,15 +1074,28 @@ def MissedJumperOutcome(
     receiving_team,
     receiving_label,
     collector,
+    isHome,
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
-    play = printShooter + " 2-point jumper...Missed!"
+    printShooter = GetPlayerLabel(shooter)
+    printDefender = GetPlayerLabel(defender)
     shooter.Stats.AddFieldGoal(False, 2)
     team_one.Stats.AddFieldGoal(False)
     rebrand = random.random()
     off_rebounder = GetRebounder(t1State.Roster)
     def_rebounder = GetRebounder(t2State.Roster)
     reb_probability = GetReboundProbability(off_rebounder, def_rebounder)
+    play = GenerateMidShotText(
+        printShooter,
+        printDefender,
+        "",
+        False,
+        "",
+        False,
+        isHome,
+        gamestate.Capacity,
+        2,
+        gamestate.PossessingTeam,
+    )
     if rebrand < reb_probability:
         gamestate.IncrementEventCount("OffReb")
         ReboundTheBall(
@@ -1013,22 +1134,25 @@ def BlockedJumperOutcome(
     receiving_team,
     receiving_label,
     collector,
+    isHome,
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
+    printShooter = GetPlayerLabel(shooter)
     shooter.Stats.AddFieldGoal(False, 2)
     team_one.Stats.AddFieldGoal(False)
     defender.Stats.AddBlock()
     team_two.Stats.AddBlocks()
-    printBlocker = (
-        defender.Position + " " + defender.FirstName + " " + defender.LastName
-    )
-    play = (
-        printShooter
-        + " 2-point jumper...BLOCKED by "
-        + receiving_team
-        + " "
-        + printBlocker
-        + "."
+    printBlocker = GetPlayerLabel(defender)
+    play = GenerateMidShotText(
+        printShooter,
+        printBlocker,
+        "",
+        False,
+        "",
+        False,
+        isHome,
+        gamestate.Capacity,
+        3,
+        gamestate.PossessingTeam,
     )
     rebrand = random.random()
     off_rebounder = GetRebounder(t1State.Roster)
@@ -1074,17 +1198,28 @@ def MissedJumperFoulOutcome(
     isHome,
     collector,
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
+    printShooter = GetPlayerLabel(shooter)
+    printDefender = GetPlayerLabel(defender)
     fouling_player = GetFouler(t2State.Roster)
     fouling_player.AddFoul(gamestate.IsNBA)
-    print_fouler = f"{fouling_player.TeamAbbr} {fouling_player.Position} {fouling_player.FirstName} {fouling_player.LastName}. "
+    print_fouler = GetPlayerLabel(fouling_player)
     if fouling_player.FouledOut:
         t2State.ReloadRoster()
-        print_fouler += f"It looks like {fouling_player.LastName} has accumulated the maximum limit on fouls and cannot play for the remainder of the game."
+    play = GenerateMidShotText(
+        printShooter,
+        printDefender,
+        "",
+        False,
+        print_fouler,
+        fouling_player.FouledOut,
+        isHome,
+        gamestate.Capacity,
+        4,
+        gamestate.PossessingTeam,
+    )
     collector.AppendPlay(
         gamestate.PossessingTeam,
-        printShooter
-        + f" 2-point jumper... Missed with a foul on the play by {print_fouler}",
+        play,
         "Foul",
         gamestate.T1Points,
         gamestate.T2Points,
@@ -1124,16 +1259,15 @@ def MadeJumperFoulOutcome(
     isHome,
     collector,
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
+    printDefender = GetPlayerLabel(defender)
+    printAssister = ""
     fouling_player = GetFouler(t2State.Roster)
     fouling_player.AddFoul(gamestate.IsNBA)
-    print_fouler = f"{fouling_player.TeamAbbr} {fouling_player.Position} {fouling_player.FirstName} {fouling_player.LastName}. "
+    print_fouler = GetPlayerLabel(fouling_player)
     if fouling_player.FouledOut:
         t2State.ReloadRoster()
-        print_fouler += f"It looks like {fouling_player.LastName} has accumulated the maximum limit on fouls and cannot play for the remainder of the game."
-    play = f"{printShooter} 2-point jumper...Score! Foul on the play and one! Foul was called on {print_fouler}"
     gamestate.AddPoints(2, isHome)
-    shooter.Stats.AddFieldGoal(True, 2)
+
     team_one.Stats.AddFieldGoal(True)
     team_one.Stats.AddPoints(
         2,
@@ -1149,12 +1283,28 @@ def MadeJumperFoulOutcome(
     if assistRand > assistJumperCutoff:
         assister = SelectAssister(shooter, t1State)
         if assister.ID != shooter.ID:
+            if gamestate.OffTheRebound == True:
+                shooter = assister
+                assister = gamestate.ReboundingPlayer
+                gamestate.ToggleOffRebound()
+            printAssister = GetPlayerLabel(assister)
             assister.Stats.AddAssist()
             team_one.Stats.AddAssist()
-            printAssister = (
-                assister.Position + " " + assister.FirstName + " " + assister.LastName
-            )
-            play += " Assisted by: " + printAssister
+            printAssister = GetPlayerLabel(assister)
+    printShooter = GetPlayerLabel(shooter)
+    shooter.Stats.AddFieldGoal(True, 2)
+    play = GenerateMidShotText(
+        printShooter,
+        printDefender,
+        printAssister,
+        False,
+        print_fouler,
+        fouling_player.FouledOut,
+        isHome,
+        gamestate.Capacity,
+        5,
+        gamestate.PossessingTeam,
+    )
     collector.AppendPlay(
         gamestate.PossessingTeam,
         play,
@@ -1201,17 +1351,15 @@ def InsideAttemptEvent(
     blockAdj = (blockAdjMagicNum1 * defender.AdjInteriorDefense) - blockAdjMagicNum2
     made2inf = 0
     if shooter.FirstName + " " + shooter.LastName == focus_player:
-        made2inf = (
-            (made2infMagicNum1 * (shooter.Finishing - 4))
-            + made2infMagicNum2
-            + gamestate.HCA
+        made2inf = ins_base + (
+            ins_adj * ((shooter.Finishing - 4) - defender.InteriorDefense)
         )
     else:
-        made2inf = (
-            (made2infMagicNum1 * shooter.Finishing) + made2infMagicNum2 + gamestate.HCA
+        made2inf = ins_base + (
+            ins_adj * ((shooter.Finishing) - defender.InteriorDefense)
         )
-    if gamestate.IsNeutral != True and isHome == True:
-        made2inf += gamestate.HCA
+    if gamestate.IsNeutral != True and isHome == False:
+        made2inf -= gamestate.HCA
     madeDiff = made2inf - madeDiffInsideMagicNum
     missed2inf = missed2infMagicNum - madeDiff - blockAdj
     made2infoul = made2infoulMagicNum
@@ -1251,6 +1399,7 @@ def InsideAttemptEvent(
             receiving_team,
             receiving_label,
             collector,
+            isHome,
         )
     elif eventOutcome < blocked2inCutoff:
         gamestate.IncrementShotResultCount("Inside", "Blocked")
@@ -1266,6 +1415,7 @@ def InsideAttemptEvent(
             receiving_team,
             receiving_label,
             collector,
+            isHome,
         )
     elif eventOutcome < missed2infoulCutoff:
         gamestate.IncrementShotResultCount("Inside", "FoulMissed")
@@ -1304,10 +1454,9 @@ def InsideAttemptEvent(
 def MadeInsideOutcome(
     gamestate, shooter, defender, team_state, team, receiving_team, isHome, collector
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
-    play = printShooter + " Inside shot... Score!"
+    printDefender = GetPlayerLabel(defender)
+    printAssister = ""
     gamestate.AddPoints(2, isHome)
-    shooter.Stats.AddFieldGoal(True, 2)
     team.Stats.AddPoints(
         2,
         gamestate.PossessionNumber,
@@ -1322,12 +1471,28 @@ def MadeInsideOutcome(
     if assistRand > assistInsideCutoff:
         assister = SelectAssister(shooter, team_state)
         if assister.ID != shooter.ID:
+            if gamestate.OffTheRebound == True:
+                shooter = assister
+                assister = gamestate.ReboundingPlayer
+                gamestate.ToggleOffRebound()
+            printAssister = GetPlayerLabel(assister)
             assister.Stats.AddAssist()
             team.Stats.AddAssist()
-            printAssister = (
-                assister.Position + " " + assister.FirstName + " " + assister.LastName
-            )
-            play += " Assisted by: " + printAssister
+    printShooter = GetPlayerLabel(shooter)
+    shooter.Stats.AddFieldGoal(True, 2)
+    play = GenerateInsideShotText(
+        printShooter,
+        printDefender,
+        printAssister,
+        gamestate.OffTheRebound,
+        "",
+        False,
+        isHome,
+        gamestate.Capacity,
+        1,
+        gamestate.PossessingTeam,
+        receiving_team,
+    )
     collector.AppendPlay(
         gamestate.PossessingTeam,
         play,
@@ -1352,15 +1517,29 @@ def MissedInsideOutcome(
     receiving_team,
     receiving_label,
     collector,
+    isHome,
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
-    play = printShooter + " 2-point jumper...Missed!"
+    printShooter = GetPlayerLabel(shooter)
+    printDefender = GetPlayerLabel(defender)
     shooter.Stats.AddFieldGoal(False, 2)
     team_one.Stats.AddFieldGoal(False)
     rebrand = random.random()
     off_rebounder = GetRebounder(t1State.Roster)
     def_rebounder = GetRebounder(t2State.Roster)
     reb_probability = GetReboundProbability(off_rebounder, def_rebounder)
+    play = GenerateInsideShotText(
+        printShooter,
+        printDefender,
+        "",
+        gamestate.OffTheRebound,
+        "",
+        False,
+        isHome,
+        gamestate.Capacity,
+        2,
+        gamestate.PossessingTeam,
+        receiving_team,
+    )
     if rebrand < reb_probability:
         gamestate.IncrementEventCount("OffReb")
         ReboundTheBall(
@@ -1399,22 +1578,26 @@ def BlockedInsideOutcome(
     receiving_team,
     receiving_label,
     collector,
+    isHome,
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
+    printShooter = GetPlayerLabel(shooter)
+    printDefender = GetPlayerLabel(defender)
     shooter.Stats.AddFieldGoal(False, 2)
     team_one.Stats.AddFieldGoal(False)
     defender.Stats.AddBlock()
     team_two.Stats.AddBlocks()
-    printBlocker = (
-        defender.Position + " " + defender.FirstName + " " + defender.LastName
-    )
-    play = (
-        printShooter
-        + " Inside shot... BLOCKED by "
-        + receiving_team
-        + " "
-        + printBlocker
-        + "."
+    play = GenerateInsideShotText(
+        printShooter,
+        printDefender,
+        "",
+        gamestate.OffTheRebound,
+        "",
+        False,
+        isHome,
+        gamestate.Capacity,
+        3,
+        gamestate.PossessingTeam,
+        receiving_team,
     )
     rebrand = random.random()
     off_rebounder = GetRebounder(t1State.Roster)
@@ -1460,16 +1643,29 @@ def MissedInsideFoulOutcome(
     isHome,
     collector,
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
+    printShooter = GetPlayerLabel(shooter)
+    printDefender = GetPlayerLabel(defender)
     fouling_player = GetFouler(t2State.Roster)
     fouling_player.AddFoul(gamestate.IsNBA)
-    print_fouler = f"{fouling_player.TeamAbbr} {fouling_player.Position} {fouling_player.FirstName} {fouling_player.LastName}. "
+    print_fouler = GetPlayerLabel(fouling_player)
     if fouling_player.FouledOut:
         t2State.ReloadRoster()
-        print_fouler += f"It looks like {fouling_player.LastName} has accumulated the maximum limit on fouls and cannot play for the remainder of the game."
+    play = GenerateInsideShotText(
+        printShooter,
+        printDefender,
+        "",
+        gamestate.OffTheRebound,
+        print_fouler,
+        fouling_player.FouledOut,
+        isHome,
+        gamestate.Capacity,
+        4,
+        gamestate.PossessingTeam,
+        receiving_team,
+    )
     collector.AppendPlay(
         gamestate.PossessingTeam,
-        f"{printShooter} Inside shot... Missed with a foul on the play by {print_fouler}",
+        play,
         "Foul",
         gamestate.T1Points,
         gamestate.T2Points,
@@ -1509,18 +1705,14 @@ def MadeInsideFoulOutcome(
     isHome,
     collector,
 ):
-    printShooter = shooter.Position + " " + shooter.FirstName + " " + shooter.LastName
+    printDefender = GetPlayerLabel(defender)
+    printAssister = ""
     fouling_player = GetFouler(t2State.Roster)
     fouling_player.AddFoul(gamestate.IsNBA)
-    print_fouler = f"{fouling_player.TeamAbbr} {fouling_player.Position} {fouling_player.FirstName} {fouling_player.LastName} was called on the foul. "
+    print_fouler = GetPlayerLabel(fouling_player)
     if fouling_player.FouledOut:
         t2State.ReloadRoster()
-        print_fouler += f"It looks like {fouling_player.LastName} has accumulated the maximum limit on fouls and cannot play for the remainder of the game."
-    play = (
-        f"{printShooter} Inside shot...Score! Foul on the play and one! {print_fouler}"
-    )
     gamestate.AddPoints(2, isHome)
-    shooter.Stats.AddFieldGoal(True, 2)
     team_one.Stats.AddFieldGoal(True)
     team_one.Stats.AddPoints(
         2,
@@ -1536,12 +1728,28 @@ def MadeInsideFoulOutcome(
     if assistRand > assistInsideCutoff:
         assister = SelectAssister(shooter, t1State)
         if assister.ID != shooter.ID:
+            if gamestate.OffTheRebound == True:
+                shooter = assister
+                assister = gamestate.ReboundingPlayer
+                gamestate.ToggleOffRebound()
             assister.Stats.AddAssist()
             team_one.Stats.AddAssist()
-            printAssister = (
-                assister.Position + " " + assister.FirstName + " " + assister.LastName
-            )
-            play += " Assisted by: " + printAssister
+            printAssister = GetPlayerLabel(assister)
+    printShooter = GetPlayerLabel(shooter)
+    shooter.Stats.AddFieldGoal(True, 2)
+    play = GenerateInsideShotText(
+        printShooter,
+        printDefender,
+        printAssister,
+        gamestate.OffTheRebound,
+        print_fouler,
+        fouling_player.FouledOut,
+        isHome,
+        gamestate.Capacity,
+        5,
+        gamestate.PossessingTeam,
+        receiving_team,
+    )
     collector.AppendPlay(
         gamestate.PossessingTeam,
         play,

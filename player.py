@@ -142,6 +142,7 @@ class Player:
         self.InjuryType = severity
         self.WeeksOfRecovery = recovery
         self.WithdrawFromGame()
+        self.Stats.AddInjury(name, severity, recovery)
 
     def AddFoul(self, is_nba):
         self.Stats.AddFoul()
@@ -160,7 +161,6 @@ class PlayerStats:
         self.Minutes = cp["Minutes"]
         self.Year = cp["Year"]
         self.MatchType = matchType
-        self.FouledOut = False
         self.Possessions = 0
         self.FGM = 0
         self.FGA = 0
@@ -180,9 +180,20 @@ class PlayerStats:
         self.Blocks = 0
         self.Turnovers = 0
         self.Fouls = 0
+        self.FouledOut = False
+        self.IsInjured = False
+        self.InjuryName = ""
+        self.InjuryType = ""
+        self.WeeksOfRecovery = 0
 
     def AddPossession(self):
         self.Possessions += 1
+
+    def AddInjury(self, ij_name, ij_type, w_o_r):
+        self.IsInjured = True
+        self.InjuryName = ij_name
+        self.InjuryType = ij_type
+        self.WeeksOfRecovery = w_o_r
 
     def AddFieldGoal(self, made_shot, pts=0):
         self.Possessions += 1

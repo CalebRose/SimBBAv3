@@ -153,11 +153,20 @@ def rungame(
             if possrand < t1State.StealCutoff:
                 game.IncrementEventCount("Steal")
                 StealEvent(
-                    game, t2State.Roster, team_one, team_two, a_logo, a_team, collector
+                    game,
+                    t2State.Roster,
+                    t1State.Roster,
+                    team_one,
+                    team_two,
+                    a_logo,
+                    a_team,
+                    collector,
                 )
             elif possrand < t1State.OtherTOCutoff:
                 game.IncrementEventCount("Turnover")
-                OtherTurnoverEvent(game, t1State, team_one, a_logo, a_team, collector)
+                OtherTurnoverEvent(
+                    game, t1State, t2State, team_one, a_logo, a_team, collector
+                )
             elif game.PossessionNumber == game.Total_Possessions + 1 and (
                 game.T2Points - game.T1Points == 3
             ):
@@ -227,6 +236,7 @@ def rungame(
                 StealEvent(
                     game,
                     t1State.Roster,
+                    t2State.Roster,
                     team_two,
                     team_one,
                     h_logo,
@@ -235,7 +245,9 @@ def rungame(
                 )
             elif possrand < t2State.OtherTOCutoff:
                 game.IncrementEventCount("Turnover")
-                OtherTurnoverEvent(game, t2State, team_two, h_logo, h_team, collector)
+                OtherTurnoverEvent(
+                    game, t2State, t1State, team_two, h_logo, h_team, collector
+                )
             elif (
                 game.PossessionNumber == game.Total_Possessions + 1
                 and game.T1Points - game.T2Points == 3
@@ -304,6 +316,7 @@ def rungame(
         if injury_rand > injury_cutoff:
             print("AN INJURY HAS OCCURED!")
             HandleInjury(t1State, t2State, injury_state)
+            # Handle injury in play by play
 
         # if NBA GAME
         if (
