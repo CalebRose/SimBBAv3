@@ -10,6 +10,7 @@ def GetPossessionText():
         "gets the ball",
         "will take over",
         "takes possession",
+        "has possession",
         "now has possession",
         "now has the ball",
         "takes control",
@@ -140,9 +141,10 @@ def GenerateReboundText(player, receiving_team, is_offense):
         f" {player} catches the ball on the rebound.",
         f" {player} rebounds the ball.",
         f" {player} wins the fight for the rebound.",
-        f" {player} reaches up with the rebound.",
+        f" {player} takes the rebound.",
+        f" {player} grabs the rebound.",
         f" {player} takes possession of the rebound.",
-        f" {player} reaches up with the rebound.",
+        f" {player} reaches up for the rebound.",
     ]
     statement = random.choice(text_list)
 
@@ -153,6 +155,9 @@ def GenerateReboundText(player, receiving_team, is_offense):
             f"{receiving_team} continues on offense. ",
             f"{receiving_team} continues their possession. ",
             f"{receiving_team} will attempt to score again. ",
+            f"{receiving_team} will attempt again. ",
+            f"{receiving_team} with another attempt. ",
+            f"{receiving_team} with another attempt for the basket. ",
         ]
         off_rebound_statement = random.choice(final_list)
         statement += f" {off_rebound_statement}"
@@ -200,6 +205,7 @@ def GenerateFreeThrowText(
         f"{shooter} makes the free throw attempt... ",
         f"{shooter} goes for the free throw... ",
         f"{shooter} aims for the basket... ",
+        f"{shooter} shoots... ",
         f"{shooter} focuses and takes the shot... ",
     ]
 
@@ -216,6 +222,7 @@ def GenerateFreeThrowText(
             f" and {shooter} gets it in!",
             f" and {shooter} comes up good on the free throw!",
             f" and {shooter} scores!",
+            " and he scores!",
             " and it's nothing but net!",
             " and it's a clean shot!",
         ]
@@ -277,6 +284,17 @@ def GenerateFouledOutText(player, fouled_out):
         f" It appears that {player} has fouled out of the game and is leaving the court.",
     ]
 
+    return random.choice(full_list)
+
+
+def GenerateInjuryText(player, injury_name, severity):
+    full_list = [
+        f"Refs have stopped the clock... there appears to be an injury on the play! {player} is heading to the bench for the remainder of the game.",
+        f"It looks like a player is down! {player} is walking off the court with what appears to be a {severity} {injury_name}.",
+        f"And {player} is down! Refs have stopped the clock and medical staff are escorting {player} off the court. Looks like it's a {injury_name}.",
+        f"And {player} is down! The assistant head coach and medical staff are escorting {player} off the court. Looks like it's a {injury_name}.",
+        f"The court goes silent as a player cries in pain. {player} is being escorted off the court by medical staff for what appears to be a {severity} {injury_name}",
+    ]
     return random.choice(full_list)
 
 
@@ -348,7 +366,7 @@ def GenerateInsideShotText(
     home_court_choice = GenerateHomeCourtText(is_home, capacity, shooter)
 
     critical_shot = random.randint(1, 20)
-    if critical_shot < 20:
+    if critical_shot < 19:
         attempt_list = [
             f"He makes the layup attempt...",
             f"He pump-fakes {defender} and attempts for 2...",

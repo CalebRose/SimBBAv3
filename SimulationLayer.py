@@ -315,8 +315,7 @@ def rungame(
         injury_rand = random.random()
         if injury_rand > injury_cutoff:
             print("AN INJURY HAS OCCURED!")
-            HandleInjury(t1State, t2State, injury_state)
-            # Handle injury in play by play
+            HandleInjury(t1State, t2State, injury_state, collector)
 
         # if NBA GAME
         if (

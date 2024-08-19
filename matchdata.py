@@ -1,8 +1,8 @@
 import requests
 import json
 
-url = "https://simnba.azurewebsites.net/"
-# url = "http://localhost:8081/"
+# url = "https://simnba.azurewebsites.net/"
+url = "http://localhost:8081/"
 
 
 def GetMatchesForSimulation():

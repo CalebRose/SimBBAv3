@@ -5,7 +5,7 @@ from matchdata import *
 import csv
 import os
 
-testing = True
+testing = False
 cbb_result_list = []
 nba_result_list = []
 script_dir = os.path.dirname(
@@ -62,6 +62,7 @@ if testing == False:
                 cbb_result_list.append(results)
             else:
                 nba_result_list.append(results)
+            break
 
 else:
     num = input("Which week of Games do you want to run? ")

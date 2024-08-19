@@ -94,10 +94,12 @@ class GameState:
         ):
             self.Quarter = 4
 
-    def DecrementPossessions(self, rebounder):
-        self.PossessionNumber -= 1
+    def EnableRebounder(self, rebounder):
         self.ReboundingPlayer = rebounder
         self.OffTheRebound = True
+
+    def DecrementPossessions(self):
+        self.PossessionNumber -= 1
 
     def SetOvertime(self):
         self.IsOT = True

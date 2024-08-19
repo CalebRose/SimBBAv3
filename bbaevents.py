@@ -84,6 +84,12 @@ def GetReboundProbability(offReb, defReb):
     return probability
 
 
+def CheckForBallHandler(gamestate, player):
+    enable_rebound = random.random()
+    if enable_rebound <= 0.3:
+        gamestate.EnableRebounder(player)
+
+
 def StealEvent(gamestate, t2roster, t1Roster, team1, team2, t, label, collector):
     pickPlayer = random.choices(t2roster, weights=[x.DefensePer for x in t2roster], k=1)
     stealPlayer = pickPlayer[0]
@@ -99,6 +105,7 @@ def StealEvent(gamestate, t2roster, t1Roster, team1, team2, t, label, collector)
     printShooter = GetPlayerLabel(stealPlayer)
     msg = GenerateStealBallText(printPlayer, printShooter, gamestate.PossessingTeam, t)
     gamestate.SetPossessingTeam(t)
+    CheckForBallHandler(gamestate, stealPlayer)
     collector.AppendPlay(
         t,
         msg,
@@ -177,6 +184,7 @@ def OtherTurnoverEvent(
             gamestate.PossessionNumber,
             gamestate.Total_Possessions,
         )
+    gamestate.ToggleOffRebound()
     gamestate.SetPossessingTeam(receiving_team)
 
 
@@ -205,7 +213,8 @@ def ReboundTheBall(
         gamestate.Total_Possessions,
     )
     if is_offense:
-        gamestate.DecrementPossessions(rebounder)
+        gamestate.DecrementPossessions()
+        CheckForBallHandler(gamestate, rebounder)
     gamestate.SetPossessingTeam(receiving_team)
 
 
@@ -403,7 +412,7 @@ def GetFouler(roster):
     return fouling_player[0]
 
 
-def HandleInjury(t1State, t2State, injury_state):
+def HandleInjury(t1State, t2State, injury_state, collector, gamestate):
     combined_list = t1State.Roster + t2State.Roster
     filtered_combined_list = [player for player in combined_list if player.Usage > 0.0]
     injured_player = random.choices(
@@ -433,8 +442,19 @@ def HandleInjury(t1State, t2State, injury_state):
         minimum = minimum * 4
     recovery_time = random.randrange(minimum, maximum)
     injuree.RecordInjury(injury_name, severity, recovery_time)
+    injuree_label = GetPlayerLabel(injuree)
     t1State.ReloadRoster()
     t2State.ReloadRoster()
+    injury_text = GenerateInjuryText(injuree_label, injury_name, severity)
+    collector.AppendPlay(
+        injuree.Abbr,
+        injury_text,
+        "Injury",
+        gamestate.T1Points,
+        gamestate.T2Points,
+        gamestate.PossessionNumber,
+        gamestate.Total_Possessions,
+    )
 
 
 def ThreePointAttemptEvent(
