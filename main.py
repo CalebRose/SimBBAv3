@@ -13,7 +13,7 @@ script_dir = os.path.dirname(
 )  # Get the absolute dir the script is in
 os.chdir(script_dir)
 print("Current Directory: ", os.getcwd())
-newPath = os.path.normpath(os.path.join(script_dir, "../simulation/BBA/"))
+newPath = os.path.normpath(os.path.join(script_dir, "../simulation/BBA/2024"))
 if not os.path.exists(newPath):
     os.makedirs(newPath)
 
@@ -62,7 +62,6 @@ if testing == False:
                 cbb_result_list.append(results)
             else:
                 nba_result_list.append(results)
-            break
 
 else:
     num = input("Which week of Games do you want to run? ")
@@ -115,6 +114,6 @@ else:
                 nba_result_list.append(results)
 
 
-if testing == False:
+if testing == False and len(matches) > 0:
     dto = ImportDTO(cbb_result_list, nba_result_list)
     SendStats(dto)

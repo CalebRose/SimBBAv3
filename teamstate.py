@@ -132,7 +132,21 @@ class TeamState:
             )
             self.Roster.append(cp)
 
-    def ReloadRoster(self):
+    def ReloadRoster(self, injuree_id, teamID, proportions):
+        if injuree_id > 0 and teamID > 0 and teamID == self.Roster[0].TeamID:
+            remaining_ins = proportions["Ins"]
+            remaining_mid = proportions["Mid"]
+            remaining_three = proportions["Three"]
+            remaining_players = [
+                p for p in self.Roster if p.ID != injuree_id and p.Minutes > 0
+            ]
+            num_remaining_players = len(remaining_players)
+            for p in remaining_players:
+                p.increment_shot_proportion(
+                    remaining_ins / num_remaining_players,
+                    remaining_mid / num_remaining_players,
+                    remaining_three / num_remaining_players,
+                )
         for x in self.Roster:
             x.get_advanced_stats(
                 self.Rebounding,

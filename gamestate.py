@@ -1,6 +1,7 @@
 import math
 from baseprobabilities import *
 from play_by_play_collector import *
+from constants import *
 
 
 class GameState:
@@ -10,6 +11,7 @@ class GameState:
         self.HCA = 0
         self.HCAAdj = 0
         self.Total_Possessions = 0
+        self.Max_Possessions = 0
         self.Quarter = 1
         self.Halftime_Point = 0
         self.T1Points = 0
@@ -63,7 +65,7 @@ class GameState:
             percentage = capacity / 12500
             if percentage > 1:
                 percentage = 1
-            self.HCA = 0.025 * percentage
+            self.HCA = 0.035 * percentage
 
     def SetPossessions(self, t1Pace, t2Pace):
         self.Total_Possessions = t1Pace + t2Pace
@@ -164,3 +166,31 @@ class GameState:
                 self.InsideShotFoulMiss += 1
             elif res == "FoulMade":
                 self.InsideShotFoulMade += 1
+
+    def GetShootingBase(self, shot_type):
+        if shot_type == 1 and self.IsNBA:
+            return nba_three_base
+        if shot_type == 1 and self.IsNBA == False:
+            return cbb_three_base
+        if shot_type == 2 and self.IsNBA:
+            return nba_mid_base
+        if shot_type == 2 and self.IsNBA == False:
+            return cbb_mid_base
+        if shot_type == 3 and self.IsNBA:
+            return nba_ins_base
+        if shot_type == 3 and self.IsNBA == False:
+            return cbb_ins_base
+
+    def GetShootingAdj(self, shot_type):
+        if shot_type == 1 and self.IsNBA:
+            return nba_three_adj
+        if shot_type == 1 and self.IsNBA == False:
+            return cbb_three_adj
+        if shot_type == 2 and self.IsNBA:
+            return nba_mid_adj
+        if shot_type == 2 and self.IsNBA == False:
+            return cbb_mid_adj
+        if shot_type == 3 and self.IsNBA:
+            return nba_ins_adj
+        if shot_type == 3 and self.IsNBA == False:
+            return cbb_ins_adj

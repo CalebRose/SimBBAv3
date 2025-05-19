@@ -79,9 +79,9 @@ def rungame(
     t1State.SetTeamAttributes(t1rosterRaw_df)
     t2State.SetTeamAttributes(t2rosterRaw_df)
     t1State.SetRoster(game.IsNBA, t1rosterRaw_df, matchType)
-    t1State.ReloadRoster()
+    t1State.ReloadRoster(0, 0, {})
     t2State.SetRoster(game.IsNBA, t2rosterRaw_df, matchType)
-    t2State.ReloadRoster()
+    t2State.ReloadRoster(0, 0, {})
     t1State.SetDefensiveAttributes()
     t2State.SetDefensiveAttributes()
 
@@ -167,8 +167,10 @@ def rungame(
                 OtherTurnoverEvent(
                     game, t1State, t2State, team_one, a_logo, a_team, collector
                 )
-            elif game.PossessionNumber == game.Total_Possessions + 1 and (
-                game.T2Points - game.T1Points == 3
+            elif (
+                (game.PossessionNumber == game.Total_Possessions)
+                or (game.PossessionNumber == game.Total_Possessions - 1)
+                and (game.T2Points - game.T1Points == 3)
             ):
                 game.IncrementEventCount("Three")
                 ThreePointAttemptEvent(
@@ -214,7 +216,7 @@ def rungame(
                     True,
                     collector,
                 )
-            elif possrand < t1State.TwoInsideCutoff:
+            else:
                 game.IncrementEventCount("Inside")
                 InsideAttemptEvent(
                     game,
@@ -249,8 +251,9 @@ def rungame(
                     game, t2State, t1State, team_two, h_logo, h_team, collector
                 )
             elif (
-                game.PossessionNumber == game.Total_Possessions + 1
-                and game.T1Points - game.T2Points == 3
+                (game.PossessionNumber == game.Total_Possessions)
+                or (game.PossessionNumber == game.Total_Possessions - 1)
+                and (game.T1Points - game.T2Points == 3)
             ):
                 game.IncrementEventCount("Three")
                 ThreePointAttemptEvent(
@@ -296,7 +299,7 @@ def rungame(
                     False,
                     collector,
                 )
-            elif possrand < t2State.TwoInsideCutoff:
+            else:
                 game.IncrementEventCount("Inside")
                 InsideAttemptEvent(
                     game,
@@ -315,7 +318,7 @@ def rungame(
         injury_rand = random.random()
         if injury_rand > injury_cutoff:
             print("AN INJURY HAS OCCURED!")
-            HandleInjury(t1State, t2State, injury_state, collector)
+            HandleInjury(t1State, t2State, injury_state, collector, game)
 
         # if NBA GAME
         if (
@@ -437,16 +440,20 @@ def rungame(
         os.makedirs(fullDirectory)
     play_by_play_path = os.path.normpath(os.path.join(fullDirectory, "play_by_plays"))
     box_score_path = os.path.normpath(os.path.join(fullDirectory, "box_scores"))
+    pbp_logic_path = os.path.normpath(os.path.join(fullDirectory, "logics"))
     if not os.path.exists(play_by_play_path):
         os.makedirs(play_by_play_path)
 
     if not os.path.exists(box_score_path):
         os.makedirs(box_score_path)
 
+    if not os.path.exists(pbp_logic_path):
+        os.makedirs(pbp_logic_path)
+
     file_name = os.path.normpath(
         play_by_play_path + f"/{gameid}_{h_team}_{a_team}_play_by_play.csv"
     )
-    with open(file_name, "w", newline="") as csvfile:
+    with open(file_name, "w", newline="", encoding="utf-8") as csvfile:
         fieldnames = [
             "Team",
             "Result",
@@ -521,7 +528,7 @@ def rungame(
     file_name = os.path.normpath(
         box_score_path + "/" + gameid + "_" + h_team + "_" + a_team + "_box_score.csv"
     )
-    with open(file_name, "w", newline="") as csvfile:
+    with open(file_name, "w", newline="", encoding="utf-8") as csvfile:
         box_score_writer = csv.writer(csvfile)
         box_score_writer.writerow(["=====BOX SCORE====="])
         if game.IsNBA == False:
@@ -808,6 +815,94 @@ def rungame(
         box_score_writer.writerow(
             ["Largest Lead", team_one.Stats.LargestLead, team_two.Stats.LargestLead]
         )
+
+    file_name = os.path.normpath(
+        pbp_logic_path + f"/{gameid}_{h_team}_{a_team}_shot_logic.csv"
+    )
+
+    with open(file_name, "w", newline="", encoding="utf-8") as csvfile:
+        fieldnames = [
+            "Team",
+            "PlayType",
+            "Outcome",
+            "Shooter",
+            "Defender",
+            "Percentage",
+            "Made Cutoff",
+            "Missed Cutoff",
+            "Blocked Cutoff",
+            "Missed Foul Cutoff",
+            "Made Foul Cutoff",
+            "Possession",
+            "Total Possessions",
+        ]
+        writer = csv.writer(csvfile)
+        writer.writerow(
+            [
+                "HomeTeam",
+                "AwayTeam",
+                "HomeTeamScore",
+                "AwayTeamScore",
+                "Total Possessions",
+                "Home Coach",
+                "HomeOffensiveStyle",
+                "HomeOffensiveFormation",
+                "HomeDefensiveFormation",
+                "HomePace",
+                "Away Coach",
+                "AwayOffensiveStyle",
+                "AwayOffensiveFormation",
+                "AwayDefensiveFormation",
+                "AwayPace",
+                "Match Name",
+                "Arena",
+                "City",
+                "State",
+            ]
+        )
+        writer.writerow(
+            [
+                h_logo,
+                a_logo,
+                str(game.T1Points),
+                str(game.T2Points),
+                str(game.Total_Possessions),
+                HomeCoach,
+                t1team_df["OffensiveStyle"],
+                t1team_df["OffensiveFormation"],
+                t1team_df["DefensiveFormation"],
+                t1team_df["Pace"],
+                AwayCoach,
+                t2team_df["OffensiveStyle"],
+                t2team_df["OffensiveFormation"],
+                t2team_df["DefensiveFormation"],
+                t2team_df["Pace"],
+                match_name,
+                arena,
+                city,
+                state,
+            ]
+        )
+        writer.writerow([""])
+        writer.writerow(fieldnames)
+        for x in collector.LogicList:
+            writer.writerow(
+                [
+                    x["Team"],
+                    x["PlayType"],
+                    x["Outcome"],
+                    x["Shooter"],
+                    x["Defender"],
+                    x["Percentage"],
+                    x["Made"],
+                    x["Missed"],
+                    x["Blocked"],
+                    x["MissedFoul"],
+                    x["MadeFoul"],
+                    x["Possession"],
+                    x["Total Possessions"],
+                ]
+            )
 
     results = MatchResults(
         team_one, team_two, t1State.Roster, t2State.Roster, gameid, is_nba
