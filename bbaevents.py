@@ -47,6 +47,13 @@ def GetShooter(roster, shot_type):
     filtered_roster = [
         player for player in roster if player.Usage > 0 and player.IsInjured == False
     ]
+
+    # make sure that there are players available to shoot
+    if not filtered_roster:
+        filtered_roster = [
+            player for player in roster if player.IsInjured == False
+        ]
+    
     weight = []
     final_roster = []
     if shot_type == 1:
@@ -61,6 +68,8 @@ def GetShooter(roster, shot_type):
     if sum(weight) == 0:
         final_roster = [x for x in filtered_roster]
         weight = [x.Usage for x in final_roster]
+        if sum(weight) == 0:
+            weight = [1 for _ in final_roster] # assign equal weight if no usage stats are available
 
     pickPlayer = random.choices(
         final_roster,
@@ -72,10 +81,16 @@ def GetShooter(roster, shot_type):
 
 def GetRebounder(roster):
     filtered_roster = [player for player in roster if player.Usage > 0]
+    if not filtered_roster:
+        filtered_roster = [
+            player for player in roster if player.IsInjured == False
+        ]
     weight = [
         player.AdjRebounding * POSITION_WEIGHTS.get(player.Position, 1.0)
         for player in filtered_roster
     ]
+    if sum(weight) == 0:
+        weight = [1 for _ in filtered_roster] # assign equal weight if no usage stats are available
     pickPlayer = random.choices(
         filtered_roster,
         weights=weight,
@@ -101,13 +116,23 @@ def CheckForBallHandler(gamestate, player):
 
 
 def StealEvent(gamestate, t2roster, t1Roster, team1, team2, t, label, collector):
-    pickPlayer = random.choices(t2roster, weights=[x.DefensePer for x in t2roster], k=1)
+    steal_weights = [x.DefensePer for x in t2roster]
+    if sum(steal_weights) == 0:
+        steal_weights = [1] * len(t2roster)
+    pickPlayer = random.choices(t2roster, weights=steal_weights, k=1)
+    if not pickPlayer:
+        pickPlayer = random.choices(t2roster, k=1) # this might not be right
     stealPlayer = pickPlayer[0]
     stealPlayer.Stats.AddPossession()
     stealPlayer.Stats.AddSteal()
+    possess_weights = [x.Usage for x in t1Roster]
+    if sum(possess_weights) <= 0:
+        possess_weights = [1] * len(t1Roster)
     possessing_player = random.choices(
-        t1Roster, weights=[x.Usage for x in t1Roster], k=1
+        t1Roster, weights=possess_weights, k=1
     )
+    if not possessing_player:
+        possessing_player = random.choices(t1Roster, k=1)
     pos_player = possessing_player[0]
     team1.Stats.AddTurnover()
     team2.Stats.AddSteal()
@@ -131,9 +156,14 @@ def OtherTurnoverEvent(
     gamestate, tState, t2State, team, receiving_team, receiving_label, collector
 ):
     otherTO = random.random()
+    usage_t1_weights = [x.Usage for x in tState.Roster]
+    if sum(usage_t1_weights) == 0:
+        usage_t1_weights = [1] * len(tState.Roster)
     pickPlayer = random.choices(
-        tState.Roster, weights=[x.Usage for x in tState.Roster], k=1
+        tState.Roster, weights=usage_t1_weights, k=1
     )
+    if not pickPlayer:
+        pickPlayer = random.choices(tState.Roster, k=1)
     toPlayer = pickPlayer[0]
     toPlayer.Stats.AddPossession()
     toPlayer.Stats.AddTurnover()
@@ -141,9 +171,14 @@ def OtherTurnoverEvent(
     team.Stats.AddTurnover()
     assister = SelectAssister(toPlayer, tState)
     ast_label = GetPlayerLabel(assister)
+    usage_t2_weights = [x.Usage for x in t2State.Roster]
+    if sum(usage_t2_weights) == 0:
+        usage_t2_weights = [1] * len(t2State.Roster)
     defender = random.choices(
-        t2State.Roster, weights=[x.Usage for x in t2State.Roster], k=1
-    )
+        t2State.Roster, weights=usage_t2_weights, k=1
+    ) # might want to add messages saying that the gameplan was not set
+    if not defender:
+        defender = random.choices(t2State.Roster, k=1)
     defPlayer = defender[0]
     def_label = GetPlayerLabel(defPlayer)
     if otherTO < outOfBoundsCutoff:
@@ -232,9 +267,14 @@ def ReboundTheBall(
 
 def SelectAssister(shooter, team_state):
     assistList = [x for x in team_state.Roster if x.ID != shooter.ID]
+    assist_weights = [x.AssistPer for x in assistList]
+    if sum(assist_weights) == 0:
+        assist_weights = [1] * len(assistList)
     pickPlayer = random.choices(
-        assistList, weights=[x.AssistPer for x in assistList], k=1
+        assistList, weights=assist_weights, k=1
     )
+    if not pickPlayer:
+        pickPlayer = [random.choice(assistList, k=1)]
     return pickPlayer[0]
 
 
@@ -434,10 +474,13 @@ def GetDefender(formation, offensive_style, roster, shooter):
 
     if not filtered_defense:
         filtered_defense = roster
-
+    
+    usage_weights = [x.Usage for x in filtered_defense]
+    if sum(usage_weights) == 0:
+        usage_weights = [1] * len(filtered_defense) # assign equal weight if no usage stats are available
     defensivePlayer = random.choices(
         filtered_defense,
-        weights=[x.Usage for x in filtered_defense],
+        weights=usage_weights,
         k=1,
     )
     return defensivePlayer[0]
@@ -445,7 +488,11 @@ def GetDefender(formation, offensive_style, roster, shooter):
 
 def GetFouler(roster):
     eligible_players = [player for player in roster if player.Usage > 0]
+    if not eligible_players:
+        eligible_players = roster
     weights = [player.AdjDiscipline for player in eligible_players]
+    if sum(weights) == 0:
+        weights = [1] * len(eligible_players)  # assign equal weight if no usage stats are available
     fouling_player = random.choices(
         eligible_players,
         weights=weights,
@@ -457,6 +504,8 @@ def GetFouler(roster):
 def HandleInjury(t1State, t2State, injury_state, collector, gamestate):
     combined_list = t1State.Roster + t2State.Roster
     filtered_combined_list = [player for player in combined_list if player.Usage > 0.0]
+    if not filtered_combined_list:
+        filtered_combined_list = [player for player in combined_list if not player.IsInjured]
     injured_player = random.choices(
         filtered_combined_list,
         weights=[x.AdjInjury for x in filtered_combined_list],
