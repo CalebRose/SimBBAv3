@@ -127,6 +127,9 @@ def rungame(
         h_logo = Home["Abbr"]
         a_logo = Away["Abbr"]
     tipoff_occurred = False
+    print("Starting Game")
+    print("Away Team: " + a_team)
+    print("Home Team: " + h_team)
 
     while game.PossessionNumber <= game.Total_Possessions:
         if game.PossessionNumber == 0 and not tipoff_occurred:

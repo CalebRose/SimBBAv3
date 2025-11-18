@@ -5,7 +5,7 @@ from matchdata import *
 import csv
 import os
 
-testing = True
+testing = False
 cbb_result_list = []
 nba_result_list = []
 script_dir = os.path.dirname(
@@ -13,7 +13,7 @@ script_dir = os.path.dirname(
 )  # Get the absolute dir the script is in
 os.chdir(script_dir)
 print("Current Directory: ", os.getcwd())
-newPath = os.path.normpath(os.path.join(script_dir, "../simulation/BBA/2024"))
+newPath = os.path.normpath(os.path.join(script_dir, "../simulation/BBA/2025"))
 if not os.path.exists(newPath):
     os.makedirs(newPath)
 

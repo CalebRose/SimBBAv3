@@ -302,7 +302,6 @@ def GenerateInsideShotText(
     shooter,
     defender,
     assister,
-    off_the_rebound,
     fouling_player,
     fouled_out,
     is_home,
@@ -315,7 +314,7 @@ def GenerateInsideShotText(
     pass_list = []
     init_choice = ""
     pass_choice = ""
-    if len(assister) == 0 and off_the_rebound == False:
+    if len(assister) == 0:
         init_list = [
             f"{shooter} drives the ball up the court. ",
             f"{shooter} brings the ball up for {possessing_team}. ",
@@ -326,7 +325,7 @@ def GenerateInsideShotText(
             f"{shooter} takes point, finding immediate pressure from {defender}. ",
             f"{shooter} brings the ball up, goes one on one against {defender}. ",
         ]
-    elif len(assister) > 0 and off_the_rebound == False:
+    elif len(assister) > 0:
         init_list = [
             f"{assister} drives the ball up the court,",
             f"{assister} moves up the court,",
@@ -343,19 +342,6 @@ def GenerateInsideShotText(
             f" passes to {shooter} amidst pressure by {defender}. ",
             f" finds an open man and passes to {shooter}. ",
             f" can't seem to get passed {defender}, he passes to {shooter} on an opening. ",
-        ]
-        pass_choice = random.choice(pass_list)
-    elif len(assister) == 0 and off_the_rebound == True:
-        init_list = [
-            f"{shooter} attempts off the rebound. ",
-            f"{shooter}, one on one against {defender} off the rebound. ",
-            f"{shooter} off the rebound, finding pressure from {defender}. ",
-        ]
-    elif len(assister) > 0 and off_the_rebound == True:
-        init_list = [
-            f"{assister} attempts off the rebound,",
-        ]
-        pass_list = [
             f" quickly passes to {shooter} on an opening. ",
             f" quickly finds {shooter} on the low post. ",
             f" dishes it to {shooter}. ",
@@ -486,7 +472,6 @@ def GenerateMidShotText(
     shooter,
     defender,
     assister,
-    off_the_rebound,
     fouling_player,
     fouled_out,
     is_home,
@@ -509,7 +494,7 @@ def GenerateMidShotText(
             f"{shooter} takes point, finding immediate pressure from {defender}. ",
             f"{shooter} brings the ball up, goes one on one against {defender}. ",
         ]
-    elif len(assister) > 0 and off_the_rebound == False:
+    elif len(assister) > 0:
         init_list = [
             f"{assister} drives the ball up the court, ",
             f"{assister} moves up the court, ",
@@ -528,19 +513,6 @@ def GenerateMidShotText(
             f" passes to {shooter} amidst pressure by {defender}. ",
             f" finds an open man and passes to {shooter}. ",
             f" can't seem to get passed {defender}, he passes to {shooter} on an opening. ",
-        ]
-        pass_choice = random.choice(pass_list)
-    elif len(assister) == 0 and off_the_rebound == True:
-        init_list = [
-            f"{shooter} attempts off the rebound, moves back for an opening. ",
-            f"{shooter}, one on one against {defender} off the rebound and outside the paint. ",
-            f"{shooter} off the rebound outside the paint, finding pressure from {defender}. ",
-        ]
-    elif len(assister) > 0 and off_the_rebound == True:
-        init_list = [
-            f"{assister} attempts off the rebound,",
-        ]
-        pass_list = [
             f" quickly passes to {shooter} on an opening outside the paint. ",
             f" quickly finds {shooter} on the short corner. ",
             f" dishes it to {shooter} outside the paint. ",
@@ -627,7 +599,6 @@ def GenerateThreePointText(
     shooter,
     defender,
     assister,
-    off_the_rebound,
     fouling_player,
     fouled_out,
     is_home,
@@ -650,7 +621,7 @@ def GenerateThreePointText(
             f"{shooter} takes point, finding immediate pressure from {defender}. ",
             f"{shooter} brings the ball up, goes one on one against {defender}. ",
         ]
-    elif len(assister) > 0 and off_the_rebound == False:
+    elif len(assister) > 0:
         init_list = [
             f"{assister} drives the ball up the court, ",
             f"{assister} moves up the court, ",
@@ -667,19 +638,6 @@ def GenerateThreePointText(
             f" passes to {shooter} amidst pressure by {defender}. ",
             f" finds an open man and passes to {shooter}. ",
             f" can't seem to get passed {defender}, he passes to {shooter} on an opening. ",
-        ]
-        pass_choice = random.choice(pass_list)
-    elif len(assister) == 0 and off_the_rebound == True:
-        init_list = [
-            f"{shooter} attempts off the rebound, drives to the corner for an opening. ",
-            f"{shooter}, one on one against {defender} off the rebound and towards the perimeter. ",
-            f"{shooter} off the rebound and moves to the perimeter, finding pressure from {defender}. ",
-        ]
-    elif len(assister) > 0 and off_the_rebound == True:
-        init_list = [
-            f"{assister} attempts off the rebound,",
-        ]
-        pass_list = [
             f" quickly passes to {shooter} on an opening on the corner. ",
             f" quickly finds {shooter} on the perimeter. ",
             f" dishes it to {shooter} on the wing. ",

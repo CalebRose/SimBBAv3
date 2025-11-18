@@ -1,4 +1,5 @@
 import random
+from typing import List, Optional
 from constants import *
 import util
 from play_by_play_generator import *
@@ -50,10 +51,8 @@ def GetShooter(roster, shot_type):
 
     # make sure that there are players available to shoot
     if not filtered_roster:
-        filtered_roster = [
-            player for player in roster if player.IsInjured == False
-        ]
-    
+        filtered_roster = [player for player in roster if player.IsInjured == False]
+
     weight = []
     final_roster = []
     if shot_type == 1:
@@ -69,7 +68,9 @@ def GetShooter(roster, shot_type):
         final_roster = [x for x in filtered_roster]
         weight = [x.Usage for x in final_roster]
         if sum(weight) == 0:
-            weight = [1 for _ in final_roster] # assign equal weight if no usage stats are available
+            weight = [
+                1 for _ in final_roster
+            ]  # assign equal weight if no usage stats are available
 
     pickPlayer = random.choices(
         final_roster,
@@ -82,15 +83,15 @@ def GetShooter(roster, shot_type):
 def GetRebounder(roster):
     filtered_roster = [player for player in roster if player.Usage > 0]
     if not filtered_roster:
-        filtered_roster = [
-            player for player in roster if player.IsInjured == False
-        ]
+        filtered_roster = [player for player in roster if player.IsInjured == False]
     weight = [
         player.AdjRebounding * POSITION_WEIGHTS.get(player.Position, 1.0)
         for player in filtered_roster
     ]
     if sum(weight) == 0:
-        weight = [1 for _ in filtered_roster] # assign equal weight if no usage stats are available
+        weight = [
+            1 for _ in filtered_roster
+        ]  # assign equal weight if no usage stats are available
     pickPlayer = random.choices(
         filtered_roster,
         weights=weight,
@@ -109,28 +110,20 @@ def GetReboundProbability(offReb, defReb):
     return probability
 
 
-def CheckForBallHandler(gamestate, player):
-    enable_rebound = random.random()
-    if enable_rebound <= 0.3:
-        gamestate.EnableRebounder(player)
-
-
 def StealEvent(gamestate, t2roster, t1Roster, team1, team2, t, label, collector):
     steal_weights = [x.DefensePer for x in t2roster]
     if sum(steal_weights) == 0:
         steal_weights = [1] * len(t2roster)
     pickPlayer = random.choices(t2roster, weights=steal_weights, k=1)
     if not pickPlayer:
-        pickPlayer = random.choices(t2roster, k=1) # this might not be right
+        pickPlayer = random.choices(t2roster, k=1)  # this might not be right
     stealPlayer = pickPlayer[0]
     stealPlayer.Stats.AddPossession()
     stealPlayer.Stats.AddSteal()
     possess_weights = [x.Usage for x in t1Roster]
     if sum(possess_weights) <= 0:
         possess_weights = [1] * len(t1Roster)
-    possessing_player = random.choices(
-        t1Roster, weights=possess_weights, k=1
-    )
+    possessing_player = random.choices(t1Roster, weights=possess_weights, k=1)
     if not possessing_player:
         possessing_player = random.choices(t1Roster, k=1)
     pos_player = possessing_player[0]
@@ -140,7 +133,6 @@ def StealEvent(gamestate, t2roster, t1Roster, team1, team2, t, label, collector)
     printShooter = GetPlayerLabel(stealPlayer)
     msg = GenerateStealBallText(printPlayer, printShooter, gamestate.PossessingTeam, t)
     gamestate.SetPossessingTeam(t)
-    CheckForBallHandler(gamestate, stealPlayer)
     collector.AppendPlay(
         t,
         msg,
@@ -159,9 +151,7 @@ def OtherTurnoverEvent(
     usage_t1_weights = [x.Usage for x in tState.Roster]
     if sum(usage_t1_weights) == 0:
         usage_t1_weights = [1] * len(tState.Roster)
-    pickPlayer = random.choices(
-        tState.Roster, weights=usage_t1_weights, k=1
-    )
+    pickPlayer = random.choices(tState.Roster, weights=usage_t1_weights, k=1)
     if not pickPlayer:
         pickPlayer = random.choices(tState.Roster, k=1)
     toPlayer = pickPlayer[0]
@@ -176,7 +166,7 @@ def OtherTurnoverEvent(
         usage_t2_weights = [1] * len(t2State.Roster)
     defender = random.choices(
         t2State.Roster, weights=usage_t2_weights, k=1
-    ) # might want to add messages saying that the gameplan was not set
+    )  # might want to add messages saying that the gameplan was not set
     if not defender:
         defender = random.choices(t2State.Roster, k=1)
     defPlayer = defender[0]
@@ -231,7 +221,6 @@ def OtherTurnoverEvent(
             gamestate.PossessionNumber,
             gamestate.Total_Possessions,
         )
-    gamestate.ToggleOffRebound()
     gamestate.SetPossessingTeam(receiving_team)
 
 
@@ -261,7 +250,6 @@ def ReboundTheBall(
     )
     if is_offense:
         gamestate.DecrementPossessions()
-        CheckForBallHandler(gamestate, rebounder)
     gamestate.SetPossessingTeam(receiving_team)
 
 
@@ -270,9 +258,7 @@ def SelectAssister(shooter, team_state):
     assist_weights = [x.AssistPer for x in assistList]
     if sum(assist_weights) == 0:
         assist_weights = [1] * len(assistList)
-    pickPlayer = random.choices(
-        assistList, weights=assist_weights, k=1
-    )
+    pickPlayer = random.choices(assistList, weights=assist_weights, k=1)
     if not pickPlayer:
         pickPlayer = [random.choice(assistList, k=1)]
     return pickPlayer[0]
@@ -416,68 +402,57 @@ def ConductFoulShots(
 
 def GetDefender(formation, offensive_style, roster, shooter):
     defensivePlayer = None
-    filtered_defense = []
-
-    def total_usage(players):
-        return sum(p.Usage for p in players)
-
-    if formation == "Man-to-Man":
-        filtered_defense = [
-            p
-            for p in roster
-            if (
-                (p.PositionOne != "" and p.PositionOne == shooter.PositionOne)
-                or (p.PositionTwo != "" and p.PositionTwo == shooter.PositionTwo)
-                or (p.PositionThree != "" and p.PositionThree == shooter.PositionThree)
+    filtered_defense = [
+        p for p in roster if p.Usage > 0 and not getattr(p, "IsInjured", False)
+    ]
+    if formation == "Man-to-Man" and shooter is not None:
+        # collect the shooter’s three eligible positions
+        shooter_pos = {
+            pos
+            for pos in (
+                shooter.PositionOne,
+                shooter.PositionTwo,
+                shooter.PositionThree,
             )
-            and p.Usage > 0.0
+            if pos
+        }
+        # only defenders who share at least one of those spots
+        m2m = [
+            p
+            for p in filtered_defense
+            if any(
+                pos in shooter_pos
+                for pos in (p.PositionOne, p.PositionTwo, p.PositionThree)
+            )
         ]
-        # Fallback for offensive style differences
-        if not filtered_defense or total_usage(filtered_defense) == 0:
-            if offensive_style == "Jumbo" and (shooter.PositionOne == "PG"):
-                filtered_defense = [
+
+        # if that fails, try your “style” fallback
+        if not m2m or sum(p.Usage for p in m2m) == 0:
+            if offensive_style == "Jumbo" and shooter.PositionOne == "PG":
+                match_pos = "SG"
+            elif offensive_style == "Small Ball" and shooter.PositionOne == "C":
+                match_pos = "PF"
+            elif offensive_style == "Microball" and shooter.PositionOne in ("C", "PF"):
+                match_pos = "SF"
+            else:
+                match_pos = None
+
+            if match_pos:
+                m2m = [
                     p
                     for p in roster
-                    if (
-                        p.PositionOne == "SG"
-                        or p.PositionTwo == "SG"
-                        or p.PositionThree == "SG"
-                    )
-                    and p.Usage > 0.0
+                    if p.Usage > 0
+                    and match_pos in (p.PositionOne, p.PositionTwo, p.PositionThree)
                 ]
-            elif offensive_style == "Small Ball" and (shooter.PositionOne == "C"):
-                filtered_defense = [
-                    p
-                    for p in roster
-                    if (
-                        p.PositionOne == "PF"
-                        or p.PositionTwo == "PF"
-                        or p.PositionThree == "PF"
-                    )
-                    and p.Usage > 0.0
-                ]
-            elif offensive_style == "Microball" and (
-                shooter.PositionOne == "C" or shooter.PositionTwo == "PF"
-            ):
-                filtered_defense = [
-                    p
-                    for p in roster
-                    if (
-                        p.PositionOne == "SF"
-                        or p.PositionTwo == "SF"
-                        or p.PositionThree == "SF"
-                    )
-                    and p.Usage > 0.0
-                ]
-    else:
-        filtered_defense = roster
 
     if not filtered_defense:
         filtered_defense = roster
-    
+
     usage_weights = [x.Usage for x in filtered_defense]
     if sum(usage_weights) == 0:
-        usage_weights = [1] * len(filtered_defense) # assign equal weight if no usage stats are available
+        usage_weights = [1] * len(
+            filtered_defense
+        )  # assign equal weight if no usage stats are available
     defensivePlayer = random.choices(
         filtered_defense,
         weights=usage_weights,
@@ -492,7 +467,9 @@ def GetFouler(roster):
         eligible_players = roster
     weights = [player.AdjDiscipline for player in eligible_players]
     if sum(weights) == 0:
-        weights = [1] * len(eligible_players)  # assign equal weight if no usage stats are available
+        weights = [1] * len(
+            eligible_players
+        )  # assign equal weight if no usage stats are available
     fouling_player = random.choices(
         eligible_players,
         weights=weights,
@@ -505,7 +482,9 @@ def HandleInjury(t1State, t2State, injury_state, collector, gamestate):
     combined_list = t1State.Roster + t2State.Roster
     filtered_combined_list = [player for player in combined_list if player.Usage > 0.0]
     if not filtered_combined_list:
-        filtered_combined_list = [player for player in combined_list if not player.IsInjured]
+        filtered_combined_list = [
+            player for player in combined_list if not player.IsInjured
+        ]
     injured_player = random.choices(
         filtered_combined_list,
         weights=[x.AdjInjury for x in filtered_combined_list],
@@ -568,8 +547,6 @@ def ThreePointAttemptEvent(
     collector,
 ):
     shooter = GetShooter(t1State.Roster, 1)
-    if gamestate.OffTheRebound == True and gamestate.ReboundingPlayer != None:
-        shooter = gamestate.ReboundingPlayer
     shooter.Stats.AddPossession()
     defender = GetDefender(
         t2State.DefensiveFormation, t2State.OffensiveStyle, t2State.Roster, shooter
@@ -811,12 +788,6 @@ def Made3Outcome(
     if assistRand > assistCutoff:
         assister = SelectAssister(s, team_state)
         if assister.ID != s.ID:
-            if (
-                gamestate.OffTheRebound == True
-                and gamestate.ReboundingPlayer.TeamID == s.TeamID
-            ):
-                s = assister
-                assister = gamestate.ReboundingPlayer
             assister.Stats.AddAssist()
             team.Stats.AddAssist()
             printAssister = GetPlayerLabel(assister)
@@ -826,7 +797,6 @@ def Made3Outcome(
         printShooter,
         printDefender,
         printAssister,
-        gamestate.OffTheRebound,
         "",
         False,
         isHome,
@@ -843,7 +813,6 @@ def Made3Outcome(
         gamestate.PossessionNumber,
         gamestate.Total_Possessions,
     )
-    gamestate.ToggleOffRebound()
     gamestate.SetPossessingTeam(receiving_team)
 
 
@@ -870,7 +839,6 @@ def Missed3Outcome(
         printShooter,
         printDefender,
         "",
-        gamestate.OffTheRebound,
         "",
         False,
         isHome,
@@ -932,7 +900,6 @@ def Blocked3Outcome(
         printShooter,
         printDefender,
         "",
-        gamestate.OffTheRebound,
         "",
         False,
         isHome,
@@ -997,7 +964,6 @@ def Missed3FoulOutcome(
         printShooter,
         printDefender,
         "",
-        gamestate.OffTheRebound,
         print_fouler,
         fouling_player.FouledOut,
         isHome,
@@ -1074,9 +1040,6 @@ def Made3FoulOutcome(
     if assistRand > assistCutoff:
         assister = SelectAssister(shooter, t1State)
         if assister.ID != shooter.ID:
-            if gamestate.OffTheRebound == True:
-                shooter = assister
-                assister = gamestate.ReboundingPlayer
             assister.Stats.AddAssist()
             team_one.Stats.AddAssist()
             printAssister = GetPlayerLabel(assister)
@@ -1085,7 +1048,6 @@ def Made3FoulOutcome(
         printShooter,
         printDefender,
         printAssister,
-        gamestate.OffTheRebound,
         fouling_label,
         fouling_player.FouledOut,
         isHome,
@@ -1104,7 +1066,6 @@ def Made3FoulOutcome(
         gamestate.PossessionNumber,
         gamestate.Total_Possessions,
     )
-    gamestate.ToggleOffRebound()
     ConductFoulShots(
         gamestate,
         1,
@@ -1135,8 +1096,6 @@ def JumperAttemptEvent(
     collector,
 ):
     shooter = GetShooter(t1State.Roster, 2)
-    if gamestate.OffTheRebound == True and gamestate.ReboundingPlayer != None:
-        shooter = gamestate.ReboundingPlayer
     shooter.Stats.AddPossession()
     defender = GetDefender(
         t2State.DefensiveFormation, t2State.OffensiveStyle, t2State.Roster, shooter
@@ -1374,12 +1333,6 @@ def MadeJumperOutcome(
     if assistRand > assistJumperCutoff:
         assister = SelectAssister(shooter, team_state)
         if assister.ID != shooter.ID:
-            if (
-                gamestate.OffTheRebound == True
-                and gamestate.ReboundingPlayer.TeamID == shooter.TeamID
-            ):
-                shooter = assister
-                assister = gamestate.ReboundingPlayer
             printAssister = GetPlayerLabel(assister)
             assister.Stats.AddAssist()
             team.Stats.AddAssist()
@@ -1389,7 +1342,6 @@ def MadeJumperOutcome(
         printShooter,
         printDefender,
         printAssister,
-        gamestate.OffTheRebound,
         "",
         False,
         isHome,
@@ -1406,7 +1358,6 @@ def MadeJumperOutcome(
         gamestate.PossessionNumber,
         gamestate.Total_Possessions,
     )
-    gamestate.ToggleOffRebound()
     gamestate.SetPossessingTeam(receiving_team)
 
 
@@ -1436,7 +1387,6 @@ def MissedJumperOutcome(
         printShooter,
         printDefender,
         "",
-        False,
         "",
         False,
         isHome,
@@ -1494,7 +1444,6 @@ def BlockedJumperOutcome(
         printShooter,
         printBlocker,
         "",
-        False,
         "",
         False,
         isHome,
@@ -1559,7 +1508,6 @@ def MissedJumperFoulOutcome(
         printShooter,
         printDefender,
         "",
-        False,
         print_fouler,
         fouling_player.FouledOut,
         isHome,
@@ -1635,21 +1583,16 @@ def MadeJumperFoulOutcome(
     if assistRand > assistJumperCutoff:
         assister = SelectAssister(shooter, t1State)
         if assister.ID != shooter.ID:
-            if gamestate.OffTheRebound == True:
-                shooter = assister
-                assister = gamestate.ReboundingPlayer
             printAssister = GetPlayerLabel(assister)
             assister.Stats.AddAssist()
             team_one.Stats.AddAssist()
             printAssister = GetPlayerLabel(assister)
     printShooter = GetPlayerLabel(shooter)
     shooter.Stats.AddFieldGoal(True, 2)
-    gamestate.ToggleOffRebound()
     play = GenerateMidShotText(
         printShooter,
         printDefender,
         printAssister,
-        False,
         print_fouler,
         fouling_player.FouledOut,
         isHome,
@@ -1933,12 +1876,6 @@ def MadeInsideOutcome(
     if assistRand > assistInsideCutoff:
         assister = SelectAssister(shooter, team_state)
         if assister.ID != shooter.ID:
-            if (
-                gamestate.OffTheRebound == True
-                and gamestate.ReboundingPlayer.TeamID == shooter.TeamID
-            ):
-                shooter = assister
-                assister = gamestate.ReboundingPlayer
             printAssister = GetPlayerLabel(assister)
             assister.Stats.AddAssist()
             team.Stats.AddAssist()
@@ -1948,7 +1885,6 @@ def MadeInsideOutcome(
         printShooter,
         printDefender,
         printAssister,
-        gamestate.OffTheRebound,
         "",
         False,
         isHome,
@@ -1957,7 +1893,6 @@ def MadeInsideOutcome(
         gamestate.PossessingTeam,
         receiving_team,
     )
-    gamestate.ToggleOffRebound()
     collector.AppendPlay(
         gamestate.PossessingTeam,
         play,
@@ -1996,7 +1931,6 @@ def MissedInsideOutcome(
         printShooter,
         printDefender,
         "",
-        gamestate.OffTheRebound,
         "",
         False,
         isHome,
@@ -2055,7 +1989,6 @@ def BlockedInsideOutcome(
         printShooter,
         printDefender,
         "",
-        gamestate.OffTheRebound,
         "",
         False,
         isHome,
@@ -2121,7 +2054,6 @@ def MissedInsideFoulOutcome(
         printShooter,
         printDefender,
         "",
-        gamestate.OffTheRebound,
         print_fouler,
         fouling_player.FouledOut,
         isHome,
@@ -2197,9 +2129,6 @@ def MadeInsideFoulOutcome(
     if assistRand > assistInsideCutoff:
         assister = SelectAssister(shooter, t1State)
         if assister.ID != shooter.ID:
-            if gamestate.OffTheRebound == True:
-                shooter = assister
-                assister = gamestate.ReboundingPlayer
             assister.Stats.AddAssist()
             team_one.Stats.AddAssist()
             printAssister = GetPlayerLabel(assister)
@@ -2209,7 +2138,6 @@ def MadeInsideFoulOutcome(
         printShooter,
         printDefender,
         printAssister,
-        gamestate.OffTheRebound,
         print_fouler,
         fouling_player.FouledOut,
         isHome,
@@ -2218,7 +2146,6 @@ def MadeInsideFoulOutcome(
         gamestate.PossessingTeam,
         receiving_team,
     )
-    gamestate.ToggleOffRebound()
     collector.AppendPlay(
         gamestate.PossessingTeam,
         play,

@@ -71,10 +71,6 @@ class GameState:
         self.Total_Possessions = t1Pace + t2Pace
         self.Halftime_Point = self.Total_Possessions / 2
 
-    def ToggleOffRebound(self):
-        self.OffTheRebound = False
-        self.ReboundingPlayer = None
-
     def IncrementPossessions(self):
         self.PossessionNumber += 1
         if (
@@ -95,10 +91,6 @@ class GameState:
             and self.PossessionNumber == math.floor(self.Total_Possessions / 1.5)
         ):
             self.Quarter = 4
-
-    def EnableRebounder(self, rebounder):
-        self.ReboundingPlayer = rebounder
-        self.OffTheRebound = True
 
     def DecrementPossessions(self):
         self.PossessionNumber -= 1
